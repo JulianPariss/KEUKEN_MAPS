@@ -47,6 +47,14 @@ const LabelCreator = ({ setParsedData, defaultValues = [], suggValues }: IProps)
     }
 
 
+    const commitCurrentValue = () => {
+        const clean = value.toLowerCase().trim();
+        if (clean.length > 0 && !existTag(clean)) {
+            addTag(clean);
+        }
+        setValue("");
+    };
+
     const handleChangeExtraTags = (e: React.ChangeEvent<HTMLInputElement>) => {
         const val = e.target.value;
 
@@ -62,6 +70,14 @@ const LabelCreator = ({ setParsedData, defaultValues = [], suggValues }: IProps)
         }
 
         setValue(val);
+    };
+
+    const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+        if (e.key === "Enter") {
+            e.preventDefault();
+            e.stopPropagation();
+            commitCurrentValue();
+        }
     };
 
     useEffect(() => {
@@ -96,6 +112,7 @@ const LabelCreator = ({ setParsedData, defaultValues = [], suggValues }: IProps)
                 className="w-full p-2 bg-primary-500/20 border border-main/15 focus:border-focus-300 rounded-dx text-main placeholder:text-main/40 text-xs outline-none transition-colors shadow-xs"
                 value={value}
                 onChange={handleChangeExtraTags}
+                onKeyDown={handleKeyDown}
                 type="text"
                 placeholder="Ingrese las etiquetas que quiera crear"
             />

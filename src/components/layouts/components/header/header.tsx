@@ -10,8 +10,33 @@ import { canDo as canDoSellerObserver } from "../../../../utils/permissions/sell
 import { canDo as canDoDriverObserver } from "../../../../utils/permissions/driverObserver.permissions";
 import DateSelector from "./components/rightContent/dateSelector";
 
+const NO_ACCESS_TOOLTIP = "Sin acceso a la sección";
+
+type ModeNavItemProps = {
+    label: string;
+    active: boolean;
+    enabled: boolean;
+    onClick: () => void;
+};
+
+const ModeNavItem = ({ label, active, enabled, onClick }: ModeNavItemProps) => (
+    <p
+        className={
+            enabled
+                ? `cursor-pointer text-xs font-medium transition-colors ${active ? "text-focus-300 font-semibold" : "text-main/50 hover:text-main"}`
+                : "cursor-not-allowed text-xs font-medium text-main/25 select-none"
+        }
+        title={enabled ? undefined : NO_ACCESS_TOOLTIP}
+        onClick={enabled ? onClick : undefined}
+        aria-disabled={!enabled}
+    >
+        {label}
+    </p>
+);
+
 const Header = () => {
     const dispatch = useAppDispatch();
+
     const { enterprise, profile } = useAppSelector((state) => state.user);
     const { date } = useAppSelector((state) => state.sidebar);
 
@@ -106,8 +131,6 @@ const Header = () => {
         setMode,
     ]);
 
-    const hasAnySection = canViewSellers || canViewDrivers || canViewPlanner;
-
     return (
         <div className="flex flex-col">
             <div className="w-full h-[60px] bg-linear-to-r from-primary-500/95 to-primary-500/90 backdrop-blur-xl border-b border-main/10 shadow-md shadow-black/25 flex justify-between items-center z-1000 relative">
@@ -125,52 +148,44 @@ const Header = () => {
                     )}
                 </div>
             </div>
-            {hasAnySection && (
-                <div className="w-full h-[40px] bg-linear-to-r from-primary-900/90 to-primary-950/90 backdrop-blur-xl absolute top-[60px] flex justify-between items-center z-998 border-y border-main/10">
-                    <div className="w-full flex justify-start items-center px-4 gap-x-10">
-                        {canViewSellers && (
-                            <p
-                                className={`cursor-pointer text-xs font-medium transition-colors ${isActive('sellerObserver') ? 'text-focus-300 font-semibold' : 'text-main/50 hover:text-main'}`}
-                                onClick={() => {
-                                    if (!isActive('sellerObserver')) {
-                                        setMode('sellerObserver');
-                                        notify('Cambio a Vendedores', 'INFO');
-                                    }
-                                }}
-                            >
-                                Vendedores
-                            </p>
-                        )}
-                        {canViewDrivers && (
-                            <p
-                                className={`cursor-pointer text-xs font-medium transition-colors ${isActive('driverObserver') ? 'text-focus-300 font-semibold' : 'text-main/50 hover:text-main'}`}
-                                onClick={() => {
-                                    if (!isActive('driverObserver')) {
-                                        setMode('driverObserver');
-                                        notify('Cambio a Conductores', 'INFO');
-                                    }
-                                }}
-                            >
-                                Conductores
-                            </p>
-                        )}
-                        {canViewPlanner && (
-                            <p
-                                className={`cursor-pointer text-xs font-medium transition-colors ${isActive('planner') ? 'text-focus-300 font-semibold' : 'text-main/50 hover:text-main'}`}
-                                onClick={() => {
-                                    if (!isActive('planner')) {
-                                        setMode('planner');
-                                        notify('Cambio a planificador', 'INFO');
-                                    }
-                                }}
-                            >
-                                Planificador
-                            </p>
-                        )}
-                    </div>
-                    <div className="w-[400px]" />
+            <div className="w-full h-[40px] bg-linear-to-r from-primary-900/90 to-primary-950/90 backdrop-blur-xl absolute top-[60px] flex justify-between items-center z-998 border-y border-main/10">
+                <div className="w-full flex justify-start items-center px-4 gap-x-10">
+                    <ModeNavItem
+                        label="Vendedores"
+                        active={isActive('sellerObserver')}
+                        enabled={canViewSellers}
+                        onClick={() => {
+                            if (!isActive('sellerObserver')) {
+                                setMode('sellerObserver');
+                                notify('Cambio a Vendedores', 'INFO');
+                            }
+                        }}
+                    />
+                    <ModeNavItem
+                        label="Conductores"
+                        active={isActive('driverObserver')}
+                        enabled={canViewDrivers}
+                        onClick={() => {
+                            if (!isActive('driverObserver')) {
+                                setMode('driverObserver');
+                                notify('Cambio a Conductores', 'INFO');
+                            }
+                        }}
+                    />
+                    <ModeNavItem
+                        label="Planificador"
+                        active={isActive('planner')}
+                        enabled={canViewPlanner}
+                        onClick={() => {
+                            if (!isActive('planner')) {
+                                setMode('planner');
+                                notify('Cambio a planificador', 'INFO');
+                            }
+                        }}
+                    />
                 </div>
-            )}
+                <div className="w-[400px]" />
+            </div>
         </div>
     );
 };

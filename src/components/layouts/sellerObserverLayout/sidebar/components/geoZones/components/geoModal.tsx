@@ -3,7 +3,7 @@ import { useForm, type SubmitHandler } from "react-hook-form"
 import * as yup from "yup"
 import { useModalRef } from "../../../../../../../utils/hooks/map/useContextRef";
 import LabelCreator from "../../../../../../labelCreator";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useAppSelector } from "../../../../../../../store/hooks";
 import { getRandomHexColor } from "@repo/map-core";
 import type { IObserverGeodata } from "../../../../../../../utils/types/geozones.types";
@@ -53,6 +53,30 @@ const GeoModal = (props: IGeoModalProps) => {
     const onCancel = () => {
         CloseModal();
     }
+
+    useEffect(() => {
+        const isTypingTarget = (el: EventTarget | null) =>
+            el instanceof HTMLInputElement ||
+            el instanceof HTMLTextAreaElement ||
+            el instanceof HTMLSelectElement;
+
+        const handleKeyDown = (event: KeyboardEvent) => {
+            if (event.key === "Escape") {
+                event.preventDefault();
+                event.stopPropagation();
+                CloseModal();
+                return;
+            }
+
+            if (event.key === "Enter" && !isTypingTarget(document.activeElement)) {
+                event.preventDefault();
+                handleSubmit(onSubmit)();
+            }
+        };
+
+        document.addEventListener("keydown", handleKeyDown, true);
+        return () => document.removeEventListener("keydown", handleKeyDown, true);
+    });
 
     return (
         <form onSubmit={handleSubmit(onSubmit)} className="w-[480px] max-w-full">

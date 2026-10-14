@@ -85,23 +85,23 @@ const Item = (props: IProps) => {
                                                 notify('No es posible editar la Geo Zona', 'WARN');
                                             }
                                         }}
-                                        className={`size-7 rounded-full p-1.5 bg-primary-900 border border-main/15 shadow-xs flex justify-center items-center transition-all ${canEdit ? 'cursor-pointer hover:bg-focus-500 hover:text-variant hover:border-focus-300' : 'cursor-not-allowed opacity-35'}`}
+                                        className={`size-7 rounded-full p-1.5 bg-primary-900 border border-main/15 shadow-xs flex justify-center items-center transition-all ${canEdit ? 'cursor-pointer hover:bg-focus-500 hover:border-focus-300 group/edit' : 'cursor-not-allowed opacity-35'}`}
                                     >
-                                        <PencilIcon className="stroke-variant size-3.5" />
+                                        <PencilIcon className="stroke-main group-hover/edit:stroke-variant size-3.5 transition-colors" />
                                     </div>
                                     <div
                                         onClick={() => { canUse ? OpenModal({ Component: <DeleteGeoZone geo={geo} enterprise_id={enterprise_id} />, isRequired: true }) : notify('Para eliminar primero termine la edición.', 'WARN'); }}
-                                        className={`size-7 rounded-full p-1.5 bg-primary-900 border border-main/15 shadow-xs flex justify-center items-center transition-all ${canUse ? 'cursor-pointer hover:bg-error hover:text-white hover:border-error/50' : 'cursor-not-allowed opacity-35'}`}
+                                        className={`size-7 rounded-full p-1.5 bg-primary-900 border border-main/15 shadow-xs flex justify-center items-center transition-all ${canUse ? 'cursor-pointer hover:bg-error hover:border-error/50 group/delete' : 'cursor-not-allowed opacity-35'}`}
                                     >
-                                        <TrashcanIcon className="stroke-variant size-3.5" />
+                                        <TrashcanIcon className="stroke-main group-hover/delete:stroke-variant size-3.5 transition-colors" />
                                     </div>
                                 </>
                             )}
                         <button
                             onClick={() => { canUse ? changeWatchedState(geo.id) : notify('Para ocultar o visualizar debe terminar la edición.', 'WARN'); }}
-                            className={`size-7 rounded-full p-1.5 bg-primary-900 border border-main/15 shadow-xs flex justify-center items-center transition-all ${canUse ? 'cursor-pointer hover:bg-focus-500 hover:text-variant hover:border-focus-300' : 'cursor-not-allowed opacity-35'}`}
+                            className={`size-7 rounded-full p-1.5 bg-primary-900 border border-main/15 shadow-xs flex justify-center items-center transition-all ${canUse ? 'cursor-pointer hover:bg-focus-500 hover:border-focus-300 group/watch' : 'cursor-not-allowed opacity-35'}`}
                         >
-                            {isWatched ? <WatchIcon className="size-3.5 stroke-variant" /> : <NoWatchIcon className="size-3.5 stroke-variant" />}
+                            {isWatched ? <WatchIcon className="size-3.5 stroke-main group-hover/watch:stroke-variant transition-colors" /> : <NoWatchIcon className="size-3.5 stroke-main group-hover/watch:stroke-variant transition-colors" />}
                         </button>
                     </div>
                 </div>
