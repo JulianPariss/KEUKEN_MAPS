@@ -17,14 +17,14 @@ import {
 import { getClientIcon, getIcon, getSellerIcon, getStartPointIcon, timeStampIcon } from '../../../../utils/helpers/orderIconPicker';
 import TimeStampModal from '../../components/timeStampModal';
 import { BASE_URL } from '../../../../utils/constants/url.constants';
-import type { IOrder, ISeller, ISSERoute, TNestedRoutes } from '../../../../utils/types/sellerObserver/sellers.types';
+import type { IOrder, ISSERoute, TNestedRoutes } from '../../../../utils/types/sellerObserver/sellers.types';
 import type { IConnectionStatus } from '../../../../utils/types/sellerObserver/locations.types';
 import moment, { type Moment } from 'moment';
 import { addRoutePoint, changeFocus, isFocussed, setIsAnimating, setOnlineStatus } from '../../../../store/slices/sellerObserver/sellersSlice';
 import { getLastPositionByPhone } from '../../../../services/locations.service';
 import OrderModal from '../../components/orderModal';
 import { useMapSellerObserverContext, useMenuRef, useModalRef, useModeRef, useRenderRef } from '../../../../utils/hooks/map/useContextRef';
-import { MqttToRoute } from '../../../../utils/helpers/routeParser';
+import { lastPositionToRoute, MqttToRoute } from '../../../../utils/helpers/routeParser';
 import useClientActions from '../../../../utils/hooks/map/useClientActions';
 import ClientTooltip from '../../components/clientTooltip';
 import { renderToString } from 'react-dom/server';
@@ -53,6 +53,8 @@ const SellerObserver = () => {
   const requestedRef = useRef<Set<number>>(new Set());
   const prevWatchList = useRef<number[]>([]);
   const isMounted = useRef<boolean>(true);
+  const sellerRoutesRef = useRef(sellerRoutes);
+  sellerRoutesRef.current = sellerRoutes;
 
   const { clientsBySeller, clientsOrders } = useAppSelector((state) => state.clients);
   const { geozones, watchList: geoWatchList, filterList: geoFilterList } = useAppSelector((state) => state.geo)
@@ -84,6 +86,12 @@ const SellerObserver = () => {
       },
       clickAction: () => { OpenModal({ Component: SellerModal, props: { userId: route.userId } }) },
       hoverAction: ((isHover, e) => {
+        const sellerName = sellerById[route.userId]?.sellerName ?? 'Unknow';
+        const points = sellerRoutesRef.current.routes[route.userId]?.[route.deviceId];
+        const lastTimestamp = points?.[points.length - 1]?.timestamp;
+        const lastTime = lastTimestamp
+          ? moment(lastTimestamp).format('HH:mm:ss')
+          : null;
         handleTooltips({
           id: route.userId,
           subId: route.deviceId,
@@ -91,7 +99,9 @@ const SellerObserver = () => {
           operation: isHover ? 'move' : 'remove',
           tooltipMapRef: 'sellersTooltips',
           target: sellerElements,
-          content: `${sellers ? sellers.find((s: ISeller) => s.seller === route.userId)?.sellerName : 'Unknow'}`,
+          content: lastTime
+            ? `<div>${sellerName}</div><div style="opacity:.75;font-size:11px">${lastTime}</div>`
+            : sellerName,
         })
       }),
       Icon: {
@@ -563,11 +573,23 @@ const SellerObserver = () => {
         if (!isMounted.current || !res) return;
 
         Object.entries(res).forEach(([deviceId, lastPos]) => {
+          const userId = lastPos.mobileUser_list.id;
+          const existing = sellerRoutesRef.current.routes[userId]?.[deviceId];
+          const lastExistingTs = existing?.[existing.length - 1]?.timestamp;
+
+          if (!lastExistingTs || moment(lastPos.timestamp).isAfter(moment(lastExistingTs))) {
+            dispatch(addRoutePoint({
+              id: userId,
+              subId: deviceId,
+              point: lastPositionToRoute(lastPos, userId),
+            }));
+          }
+
           trackSeller({
             enterprise: lastPos.enterprise_id,
             lng: lastPos.lon,
             lat: lastPos.lat,
-            userId: lastPos.mobileUser_list.id,
+            userId,
             battery: lastPos.battery,
             deliveryId: lastPos.deliveryId,
             orderType: lastPos.orderType,
@@ -630,14 +652,18 @@ const SellerObserver = () => {
         if ('status' in data && 'userId' in data) {
           dispatch(setOnlineStatus({ sellerId: data.userId, status: data.status }))
         } else {
+          const timestampUTC =
+            data.timestampUTC || (data as { timestamp?: string }).timestamp || moment().toISOString();
+          const normalizedData = { ...data, timestampUTC };
+
           dispatch(addRoutePoint({
             id: data.userId,
             subId: data.deviceId,
-            point: MqttToRoute(data),
+            point: MqttToRoute(normalizedData),
           }));
 
           if (getVisibilityState(data.userId, watchList, filterList).visibleInMap && data.orderType === -2) {
-            trackSeller(data);
+            trackSeller(normalizedData);
 
             const polylinesObj = sellerElements.current?.[data.userId]?.routePolyline;
             let lastBatchKey: string | null = null;
@@ -661,7 +687,7 @@ const SellerObserver = () => {
 
             if (lastPolyline && lastPolyline._timeStamps && lastPolyline._timeStamps.length > 0) {
               const lastTimestamp = lastPolyline._timeStamps[lastPolyline._timeStamps.length - 1];
-              const diffMinutes = moment(data.timestampUTC).diff(moment(lastTimestamp), 'minutes');
+              const diffMinutes = moment(timestampUTC).diff(moment(lastTimestamp), 'minutes');
 
               if (diffMinutes > routeThreshold) {
                 const lastLatLngs = lastPolyline.getLatLngs();
@@ -671,7 +697,7 @@ const SellerObserver = () => {
                 createPolyLine({
                   id: data.userId,
                   subId: `${data.deviceId}_${lastBatchIdx + 1}`,
-                  timestamp: [lastTimestamp, data.timestampUTC],
+                  timestamp: [lastTimestamp, timestampUTC],
                   polylineMapRef: 'routePolyline',
                   operation: 'add',
                   points: [[lastPoint.lat, lastPoint.lng], [Number(data.lat), Number(data.lng)]],
@@ -687,7 +713,7 @@ const SellerObserver = () => {
                 createPolyLine({
                   id: data.userId,
                   subId: `${data.deviceId}_${lastBatchIdx + 2}`,
-                  timestamp: [data.timestampUTC],
+                  timestamp: [timestampUTC],
                   polylineMapRef: 'routePolyline',
                   operation: 'add',
                   points: [[Number(data.lat), Number(data.lng)]],
@@ -702,7 +728,7 @@ const SellerObserver = () => {
                 createPolyLine({
                   id: data.userId,
                   subId: lastBatchKey!,
-                  timestamp: [data.timestampUTC],
+                  timestamp: [timestampUTC],
                   polylineMapRef: 'routePolyline',
                   operation: 'extend',
                   points: [[Number(data.lat), Number(data.lng)]],
@@ -714,7 +740,7 @@ const SellerObserver = () => {
               createPolyLine({
                 id: data.userId,
                 subId: `${data.deviceId}_0`,
-                timestamp: [data.timestampUTC],
+                timestamp: [timestampUTC],
                 polylineMapRef: 'routePolyline',
                 operation: 'add',
                 points: [[Number(data.lat), Number(data.lng)]],

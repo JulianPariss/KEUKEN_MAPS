@@ -25,7 +25,7 @@ import { renderToString } from 'react-dom/server';
 import DeliveryClientTooltip from '../../components/deliveryClientTooltip';
 import { getLastPositionByPhone } from '../../../../services/locations.service';
 import useDeliveryClientActions from '../../../../utils/hooks/map/useDeliveryClientActions';
-import { MqttToRoute } from '../../../../utils/helpers/routeParser';
+import { lastPositionToRoute, MqttToRoute } from '../../../../utils/helpers/routeParser';
 
 const MapView = () => {
   const { fitCoordinates } = useMapCore();
@@ -35,7 +35,7 @@ const MapView = () => {
   const MAX_BATCH_SIZE = 55;
 
   const dispatch = useAppDispatch();
-  const { driversUI, driverRoutes, watchList, filterList, animation } = useAppSelector((state) => state.drivers);
+  const { driversUI, driverRoutes, watchList, filterList, animation, driverById } = useAppSelector((state) => state.drivers);
   const { deliveriesByDriverId, watchList: deliveryWatchList } = useAppSelector((state) => state.deliveries);
   const { clients, clientIdsByDeliveryId } = useAppSelector((state) => state.deliveryClients);
   const { TIMESTAMPS, ROUTES } = useDriverRenderRef();
@@ -45,6 +45,8 @@ const MapView = () => {
   const isMounted = useRef<boolean>(true);
   const animationRef = useRef(animation);
   animationRef.current = animation;
+  const driverRoutesRef = useRef(driverRoutes);
+  driverRoutesRef.current = driverRoutes;
 
   const { enterprise } = useAppSelector((state) => state.user);
   const { date } = useAppSelector((state) => state.sidebar)
@@ -78,7 +80,25 @@ const MapView = () => {
         });
       },
       leftClickAction: () => {},
-      hoverAction: () => {},
+      hoverAction: ((isHover, e) => {
+        const driverName = driverById[route.userId]?.name ?? 'Unknow';
+        const points = driverRoutesRef.current.routes[route.userId]?.[route.deviceId];
+        const lastTimestamp = points?.[points.length - 1]?.timestamp;
+        const lastTime = lastTimestamp
+          ? moment(lastTimestamp).format('HH:mm:ss')
+          : null;
+        handleTooltips({
+          id: route.userId,
+          subId: route.deviceId,
+          latlng: e._latlng,
+          operation: isHover ? 'move' : 'remove',
+          tooltipMapRef: 'driversTooltips',
+          target: driverElements,
+          content: lastTime
+            ? `<div>${driverName}</div><div style="opacity:.75;font-size:11px">${lastTime}</div>`
+            : driverName,
+        })
+      }),
       Icon: {
         size: 53,
         iconUrl: getDriverIcon(
@@ -462,11 +482,23 @@ const MapView = () => {
         if (!isMounted.current || !res) return;
 
         Object.entries(res).forEach(([deviceId, lastPos]) => {
+          const userId = lastPos.mobileUser_list.id;
+          const existing = driverRoutesRef.current.routes[userId]?.[deviceId];
+          const lastExistingTs = existing?.[existing.length - 1]?.timestamp;
+
+          if (!lastExistingTs || moment(lastPos.timestamp).isAfter(moment(lastExistingTs))) {
+            dispatch(addRoutePoint({
+              id: userId,
+              subId: deviceId,
+              point: lastPositionToRoute(lastPos, userId),
+            }));
+          }
+
           trackDriver({
             enterprise: lastPos.enterprise_id,
             lng: lastPos.lon,
             lat: lastPos.lat,
-            userId: lastPos.mobileUser_list.id,
+            userId,
             battery: lastPos.battery,
             deliveryId: lastPos.deliveryId,
             orderType: lastPos.orderType,
