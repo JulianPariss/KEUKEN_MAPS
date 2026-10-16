@@ -1,15 +1,24 @@
 import { useMemo } from 'react';
+import moment from 'moment';
+import { useMapTime } from '@repo/map-core';
 import type { IFDeliverie, IFDeliveryClient } from '@repo/api-contracts/firebase';
 import { CartXMarkIcon } from '@repo/icons';
 import ClientItem from './clientItem';
 import { useAppSelector } from '../../../../../../../../store/hooks';
 import DotsLoader from '../../../../../../components/dotsLoader';
 import { formatMoney } from '../../../../../../../../utils/helpers/formatters';
+import {
+  resolveVisitForClient,
+  selectVisitByDeliveryClientKey,
+} from '../../../../../../../../store/slices/driverObserver/visitsSlice';
+import type { IFVisit } from '@repo/api-contracts/firebase';
 
 interface ITimeLineProps {
   delivery: IFDeliverie;
   driverId: number;
 }
+
+const TIME_GAP_MINUTES = 5;
 
 const TimeDivider = ({ isActive, isShort = false }: { isActive: boolean; isShort?: boolean }) => (
   <hr
@@ -21,12 +30,27 @@ const TimeDivider = ({ isActive, isShort = false }: { isActive: boolean; isShort
   />
 );
 
+const getClientVisitTime = (
+  client: IFDeliveryClient,
+  deliveryId: number,
+  visitByKey: Record<string, IFVisit>
+): string | null => {
+  if (client.visitedAt) return client.visitedAt;
+  return resolveVisitForClient(visitByKey, deliveryId, client)?.visitTime || null;
+};
+
 const TimeLine = ({ delivery, driverId }: ITimeLineProps) => {
+  const { currentProgress, startTime } = useMapTime();
+  const { isAnimating, driverAnimated } = useAppSelector((state) => state.drivers.animation);
   const { clientIdsByDeliveryId, clientById, loading } = useAppSelector(
     (state) => state.deliveryClients
   );
+  const visitByKey = useAppSelector(selectVisitByDeliveryClientKey);
 
-  // Cargar y ordenar clientes según clientIdsByDeliveryId y client.index
+  const animatedMoment = moment(startTime).add(currentProgress, 'seconds');
+  const isDriverAnimating = isAnimating && driverAnimated === driverId;
+
+  // Orden cronológico por visitedAt / visitTime (sin hora al final, por index)
   const sortedClients = useMemo(() => {
     const clientIds = clientIdsByDeliveryId[delivery.id] || [];
     const list = clientIds
@@ -34,14 +58,40 @@ const TimeLine = ({ delivery, driverId }: ITimeLineProps) => {
       .filter((c): c is IFDeliveryClient => Boolean(c));
 
     return list.slice().sort((a, b) => {
+      const aTime = getClientVisitTime(a, delivery.id, visitByKey);
+      const bTime = getClientVisitTime(b, delivery.id, visitByKey);
+
+      if (aTime && bTime) {
+        return new Date(aTime).getTime() - new Date(bTime).getTime();
+      }
+      if (aTime && !bTime) return -1;
+      if (!aTime && bTime) return 1;
+
       if (a.index != null && b.index != null) return a.index - b.index;
       if (a.index != null) return -1;
       if (b.index != null) return 1;
       return 0;
     });
-  }, [clientIdsByDeliveryId, clientById, delivery.id]);
+  }, [clientIdsByDeliveryId, clientById, delivery.id, visitByKey]);
 
-  // Estadísticas del reparto y progreso de paradas
+  const itsHappened = (visitTime: string | null) => {
+    if (!visitTime || !isDriverAnimating) return false;
+    return animatedMoment.isAfter(
+      moment(visitTime).clone().subtract(TIME_GAP_MINUTES, 'minutes')
+    );
+  };
+
+  const itsTimed = (visitTime: string | null) => {
+    if (!visitTime || !isDriverAnimating) return false;
+    const created = moment(visitTime);
+    return animatedMoment.isBetween(
+      created.clone().subtract(TIME_GAP_MINUTES, 'minutes'),
+      created,
+      undefined,
+      '[]'
+    );
+  };
+
   const stats = useMemo(() => {
     let processedCount = 0;
     let totalBulks = 0;
@@ -77,7 +127,6 @@ const TimeLine = ({ delivery, driverId }: ITimeLineProps) => {
   return (
     <div className="flex flex-col justify-between min-h-full">
       <div className="h-fit w-full flex flex-col justify-center items-center mt-4 px-4">
-        {/* Estado de carga */}
         {loading && sortedClients.length === 0 && (
           <div className="flex flex-col items-center justify-center p-8 text-main/60 gap-3">
             <DotsLoader size="md" />
@@ -85,7 +134,6 @@ const TimeLine = ({ delivery, driverId }: ITimeLineProps) => {
           </div>
         )}
 
-        {/* Estado vacío */}
         {!loading && sortedClients.length === 0 && (
           <div className="flex flex-col items-center justify-center p-8 text-main/40 gap-3 text-center">
             <CartXMarkIcon className="size-10 stroke-main/30" />
@@ -95,8 +143,12 @@ const TimeLine = ({ delivery, driverId }: ITimeLineProps) => {
           </div>
         )}
 
-        {/* Lista de clientes (paradas ordenadas con conector superpuesto entre cards) */}
         {sortedClients.map((client, index) => {
+          const visitTime = getClientVisitTime(client, delivery.id, visitByKey);
+          const happened = itsHappened(visitTime);
+          const timed = itsTimed(visitTime);
+          const isActive = happened || !isDriverAnimating;
+
           return (
             <div key={client.id || client.clientId || index} className="w-full">
               <ClientItem
@@ -104,11 +156,21 @@ const TimeLine = ({ delivery, driverId }: ITimeLineProps) => {
                 index={index}
                 deliveryId={delivery.id}
                 driverId={driverId}
+                displayTimeOverride={visitTime}
+                itsTimed={timed}
+                isHighlighted={happened}
+                isActive={isActive}
               />
               <div className="w-full flex justify-between">
                 <div className="w-full relative h-[20px] z-10">
                   {sortedClients.length - 1 > index ? (
-                    <TimeDivider isActive={Boolean(client.isProcessed)} />
+                    <TimeDivider
+                      isActive={
+                        isDriverAnimating
+                          ? happened
+                          : Boolean(client.isProcessed)
+                      }
+                    />
                   ) : null}
                 </div>
               </div>
@@ -117,7 +179,6 @@ const TimeLine = ({ delivery, driverId }: ITimeLineProps) => {
         })}
       </div>
 
-      {/* Footer sticky con totalizadores y progreso */}
       <div className="sticky bottom-0 bg-primary-950/95 backdrop-blur-xl p-3 w-full z-50 flex flex-col gap-2 border-t border-main/10 shadow-up-md">
         <div className="flex justify-between items-center text-xs">
           <span className="text-main/60 font-medium">Progreso de entrega:</span>

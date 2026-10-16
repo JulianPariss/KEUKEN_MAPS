@@ -52,7 +52,14 @@ const MapView = () => {
   const { date } = useAppSelector((state) => state.sidebar)
 
   const mapContext = useMapDriverObserverContext();
-  const { createPolyLine, resetPathElements, handleMarkers, handleTooltips, handleActions, snakePolyLines } = useCreatePath({ mapRef: mapContext.mapRef });
+  const {
+    createPolyLine,
+    resetPathElements,
+    handleMarkers,
+    handleTooltips,
+    handleActions,
+    snakePolyLines,
+  } = useCreatePath({ mapRef: mapContext.mapRef });
   const snakePolyLinesRef = useRef(snakePolyLines);
   snakePolyLinesRef.current = snakePolyLines;
 
@@ -346,8 +353,7 @@ const MapView = () => {
             ? renderToString(<DeliveryClientTooltip client={client} />)
             : '';
           handleTooltips({
-            id: 'deliveryClients',
-            subId: clientId,
+            id: clientId,
             latlng: e._latlng || e.latlng,
             operation: isHover ? 'move' : 'remove',
             tooltipMapRef: 'clientTooltips',
@@ -517,10 +523,11 @@ const MapView = () => {
     };
   }, [watchList, filterList, date, TIMESTAMPS, ROUTES, enterprise.enterprise_id]);
 
-  // CLIENTS MARKERS: Renderizado reactivo con 2 capas de filtrado (drivers.watchList y deliveries.watchList)
+  // CLIENTS MARKERS: igual que sellers — reset excluye el bucket de markers y borra tooltips keyed por clientId
   useEffect(() => {
+    resetPathElements(clientElements, ['deliveryClients']);
     clientsMarkers();
-  }, [clientsMarkers]);
+  }, [clientsMarkers, clientElements, resetPathElements]);
 
   useEffect(() => {
     dispatch(setIsAnimating({ isAnimating: false, driverAnimated: null }));

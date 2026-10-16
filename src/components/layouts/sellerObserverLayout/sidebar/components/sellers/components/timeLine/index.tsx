@@ -142,7 +142,7 @@ const TimeLine = (props: IProps) => {
                                         seller={seller}
                                         side={false}
                                         itsHappened={itsHappened}
-                                        itsTimed={itsTimed(order)}
+                                        itsTimed={itsTimed(order)} 
                                         isActive={itsHappened(order) || !isAnimating}
                                         client={client}
                                     />

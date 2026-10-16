@@ -9,6 +9,7 @@ import ClientSection from "./components/clients";
 import { fetchDrivers } from "../../../../store/slices/driverObserver/driversSlice";
 import { fetchDeliveriesByDrivers, resetDeliveries } from "../../../../store/slices/driverObserver/deliveriesSlice";
 import { fetchClientsByDeliveries, resetDeliveryClients } from "../../../../store/slices/driverObserver/clientsSlice";
+import { fetchVisitsByDeliveries, resetVisits } from "../../../../store/slices/driverObserver/visitsSlice";
 import { fetchReturnReasons } from "../../../../store/slices/driverObserver/rejectedsSlice";
 import { fetchInvoicesByDate } from "../../../../store/slices/driverObserver/invoicesSlice";
 import { useViewRef } from "../../../../utils/hooks/map/useContextRef";
@@ -52,6 +53,7 @@ const Sidebar = () => {
             } else {
                 dispatch(resetDeliveries());
                 dispatch(resetDeliveryClients());
+                dispatch(resetVisits());
             }
         }
     }, [dispatch, drivers, enterprise.enterprise_id, date]);
@@ -60,8 +62,10 @@ const Sidebar = () => {
         if (enterprise.enterprise_id !== -1) {
             if (deliveries && deliveries.length > 0) {
                 dispatch(fetchClientsByDeliveries(deliveries));
+                dispatch(fetchVisitsByDeliveries(deliveries));
             } else {
                 dispatch(resetDeliveryClients());
+                dispatch(resetVisits());
             }
         }
     }, [dispatch, deliveries, enterprise.enterprise_id]);
