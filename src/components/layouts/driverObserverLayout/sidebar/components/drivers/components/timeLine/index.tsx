@@ -50,7 +50,7 @@ const TimeLine = ({ delivery, driverId }: ITimeLineProps) => {
   const animatedMoment = moment(startTime).add(currentProgress, 'seconds');
   const isDriverAnimating = isAnimating && driverAnimated === driverId;
 
-  // Orden cronológico por visitedAt / visitTime (sin hora al final, por index)
+  // 1) horario de visita · 2) procesados sin visita · 3) index (pendientes)
   const sortedClients = useMemo(() => {
     const clientIds = clientIdsByDeliveryId[delivery.id] || [];
     const list = clientIds
@@ -62,11 +62,20 @@ const TimeLine = ({ delivery, driverId }: ITimeLineProps) => {
       const bTime = getClientVisitTime(b, delivery.id, visitByKey);
 
       if (aTime && bTime) {
-        return new Date(aTime).getTime() - new Date(bTime).getTime();
+        const timeDiff = new Date(aTime).getTime() - new Date(bTime).getTime();
+        if (timeDiff !== 0) return timeDiff;
+      } else if (aTime && !bTime) {
+        return -1;
+      } else if (!aTime && bTime) {
+        return 1;
       }
-      if (aTime && !bTime) return -1;
-      if (!aTime && bTime) return 1;
 
+      // Sin visita (o mismo horario): procesados antes que pendientes
+      if (Boolean(a.isProcessed) !== Boolean(b.isProcessed)) {
+        return a.isProcessed ? -1 : 1;
+      }
+
+      // Pendientes: orden de parada (index)
       if (a.index != null && b.index != null) return a.index - b.index;
       if (a.index != null) return -1;
       if (b.index != null) return 1;
