@@ -37,23 +37,21 @@ const ClientTooltip = (props: IProps) => {
             </div>
 
             <div className="flex items-center gap-1.5">
-                <div className={`px-2 py-1 rounded-dx text-[11px] font-semibold text-variant shadow-xs shrink-0 ${
-                    client.visited ? 'bg-status-success' : 'bg-status-error'
-                }`}>
+                <div className={`px-2 py-1 rounded-dx text-[11px] font-semibold text-variant shadow-xs shrink-0 ${client.visited ? 'bg-status-success' : 'bg-status-error'
+                    }`}>
                     PDV: {client.code}
                 </div>
-                <div className={`px-2.5 py-1 rounded-dx text-[11px] font-semibold text-variant shadow-xs flex-1 truncate ${
-                    total > 0
-                        ? 'bg-status-success'
-                        : noSaleReason
+                <div className={`px-2.5 py-1 rounded-dx text-[11px] font-semibold text-variant shadow-xs flex-1 truncate ${total > 0
+                    ? 'bg-status-success'
+                    : noSaleReason
                         ? 'bg-status-warning'
                         : 'bg-status-error'
-                }`}>
+                    }`}>
                     {client.name}
                 </div>
             </div>
 
-            <div className="flex flex-col mt-2 pt-1.5 border-t border-main/10">
+            <div className="flex flex-col gap-1 mt-2 pt-1.5 border-t border-main/10">
                 {total > 0 ? (
                     <div className="flex justify-between items-center text-xs">
                         <span className="text-[10px] font-bold tracking-wider text-main/60 uppercase">PEDIDO</span>
@@ -64,9 +62,14 @@ const ClientTooltip = (props: IProps) => {
                 ) : (
                     <div className="flex items-center gap-1.5 text-xs text-main/60">
                         <div className={`size-1.5 rounded-full shrink-0 ${noSaleReason ? 'bg-status-warning' : 'bg-status-error'}`} />
-                        <span className="truncate">{orders?.[0]?.noSaleReason ?? 'SIN VISITAR'}</span>
+                        <span className="truncate">MNV: {orders?.[0]?.noSaleReason ?? 'SIN JUSTIFICAR'}</span>
                     </div>
                 )}
+
+                <div className="flex items-center gap-1.5 text-xs text-main/60">
+                    <div className={`size-1.5 rounded-full shrink-0 ${client.visited ? 'bg-status-success' : 'bg-status-error'}`} />
+                    <span className="truncate">{client.visited ? 'VISITADO' : 'NO VISITADO'}</span>
+                </div>
             </div>
         </div>
     );

@@ -53,6 +53,8 @@ export default defineConfig({
       dxThemePlugin(),
     ],
   define: {
+    'process.env.THEME_SHEET': JSON.stringify(process.env.THEME_SHEET || ''),
+    'process.env.APP_BRAND': JSON.stringify(process.env.APP_BRAND || process.env.BRAND || ''),
     'process.env': {},
   },
   server: {
