@@ -16,6 +16,7 @@ const ClientTooltip = (props: IProps) => {
 
     const total = orders?.reduce((acc, order) => acc + order.total, 0) ?? 0;
     const noSaleReason = orders?.find((order) => order.noSaleReason) ?? null;
+    const visitAt = client.visits?.[0]?.start || orders?.[0]?.t_created || null;
 
     return (
         <div className="flex flex-col min-w-[280px] max-w-[340px] text-main font-sans">
@@ -27,12 +28,16 @@ const ClientTooltip = (props: IProps) => {
                 ) : (
                     <p className="text-xs text-main/50 italic mr-2">Sin vendedor asignado</p>
                 )}
-                <div className="flex items-center text-[11px] text-main/60 font-mono shrink-0">
-                    {orders?.[0]?.t_created && (
-                        <span>{moment(orders[0].t_created).format("HH:mm:ss")}</span>
+                <div className="flex items-center text-[11px] text-main/60 font-mono shrink-0" title="Hora de visita | duración">
+                    {visitAt ? (
+                        <span title="Hora de visita">{moment(visitAt).format("HH:mm:ss")}</span>
+                    ) : (
+                        <span>--:--:--</span>
                     )}
-                    {orders?.[0]?.t_created && <span className="text-main/20 mx-1">|</span>}
-                    <span className="font-semibold text-main/80">{formatMinutes(client.totalMinutes)}</span>
+                    <span className="text-main/20 mx-1">|</span>
+                    <span className="font-semibold text-main/80" title="Duración en PDV">
+                        {formatMinutes(client.totalMinutes)}
+                    </span>
                 </div>
             </div>
 

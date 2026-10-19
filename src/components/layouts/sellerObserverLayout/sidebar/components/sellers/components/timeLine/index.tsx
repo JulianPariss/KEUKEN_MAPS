@@ -1,7 +1,7 @@
 import { useMapTime } from "@repo/map-core";
 import type { IGps, IOrder } from "../../../../../../../../utils/types/sellerObserver/sellers.types"
 import { clientToOrder, type IClient } from "../../../../../../../../utils/types/sellerObserver/clients.types";
-import { getClientType } from "../../../../../../../../utils/helpers/clientStatus";
+import { getClientType, shouldListClientInTimeline } from "../../../../../../../../utils/helpers/clientStatus";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import GpsItem from "./gpsItem";
 import OrderItem from "./oderItem";
@@ -44,6 +44,13 @@ const TimeLine = (props: IProps) => {
 
     const animatedMoment = moment(startTime).add(currentProgress, 'seconds');
 
+    const getEventTime = (item: ITimeList) => {
+        const raw = item.ORDER?.t_created || item.GPS?.timestamp || '';
+        if (!raw) return Number.POSITIVE_INFINITY;
+        const time = new Date(raw).getTime();
+        return Number.isNaN(time) ? Number.POSITIVE_INFINITY : time;
+    };
+
     const sortTimeLine = () => {
         const orderEvents: ITimeList[] = orders.map((order) => ({
             key: 'ORDER',
@@ -57,27 +64,23 @@ const TimeLine = (props: IProps) => {
             GPS: gp,
         }));
 
-        const sortedEvents = [...orderEvents, ...gpsEvents].sort((a, b) => {
-            const aTime = new Date(a.ORDER?.t_created || a.GPS?.timestamp || 0).getTime();
-            const bTime = new Date(b.ORDER?.t_created || b.GPS?.timestamp || 0).getTime();
-            return aTime - bTime;
-        });
+        const clientsWithoutOrder: ITimeList[] = clients
+            .filter(shouldListClientInTimeline)
+            .map((cl): ITimeList => ({
+                key: 'ORDER',
+                ORDER: clientToOrder(cl),
+                GPS: null,
+            }));
 
-        return sortedEvents;
+        return [...orderEvents, ...gpsEvents, ...clientsWithoutOrder].sort(
+            (a, b) => getEventTime(a) - getEventTime(b)
+        );
     };
-
-    const unknowClients: ITimeList[] = clients.filter((cl) => getClientType(cl) === 'PENDING').map((cl): ITimeList => (
-        {
-            key: 'ORDER',
-            ORDER: clientToOrder(cl),
-            GPS: null,
-        }
-    ));
 
     useEffect(() => {
         if (!gps && !orders) return;
-        setSortedEvents([...sortTimeLine(), ...unknowClients]);
-    }, [gps, orders]);
+        setSortedEvents(sortTimeLine());
+    }, [gps, orders, clients]);
 
     const createdMoment = (order: IOrder) => moment(order.t_created);
 
@@ -122,7 +125,7 @@ const TimeLine = (props: IProps) => {
             return null;
         }
         return clientsBySeller[seller].find(
-            (cl) => Number(cl.code) === order?.clientData?.code
+            (cl) => Number(cl.code) === Number(order?.clientData?.code)
         ) ?? null;
     }, [clientsBySeller, seller]);
 
@@ -136,7 +139,7 @@ const TimeLine = (props: IProps) => {
                             const client = getClientFromOrder(order);
                             const clType = client ? getClientType(client) : 'PENDING';
                             return (
-                                <div key={`${order.uuid}-${index}`} className="w-full">
+                                <div key={`${order.uuid || order.clientData?.code || 'order'}-${index}`} className="w-full">
                                     <OrderItem
                                         order={order}
                                         seller={seller}

@@ -56,21 +56,24 @@ export const getStartPointIcon = (color: string) => {
 
 export const getClientIcon = (iconType: TClientStatus, time: string, timeOnZone: string, isTimeVisible: boolean = false, sellerColor?: string) => {
     const iconsTypes: Record<TClientStatus, { color: string }> = {
-        UNKOWN: {
-            color: '#777777',
-        },
         VISITED: {
             color: '#0b7731',
-        },
-        NOVISITED: {
-            color: '#bf1126',
         },
         NOSALE: {
             color: '#e7c712',
         },
+        UNJUSTIFIED: {
+            color: '#e7c712',
+        },
+        NOVISITED: {
+            color: '#bf1126', 
+        },
         PENDING: {
-            color: '#777778',
-        }
+            color: '#777778', 
+        },
+        UNKOWN: {
+            color: '#777777',
+        },
     }
 
     const clientIcon = isTimeVisible ?

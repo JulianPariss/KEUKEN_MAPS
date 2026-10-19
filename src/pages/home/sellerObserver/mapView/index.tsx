@@ -440,7 +440,11 @@ const SellerObserver = () => {
             size: isFocus ? 65 : 16,
             iconUrl: getClientIcon(
               getClientType(client),
-              (clFirstOrder ? moment(clFirstOrder.t_created).format('HH:mm:ss') : '-:-:-'),
+              (clFirstOrder
+                ? moment(clFirstOrder.t_created).format('HH:mm:ss')
+                : client.visits?.[0]?.start
+                  ? moment(client.visits[0].start).format('HH:mm:ss')
+                  : '-:-:-'),
               formatMinutes(client.totalMinutes),
               isFocus,
               sellerColor

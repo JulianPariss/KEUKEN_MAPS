@@ -95,15 +95,7 @@ const useClientActions = (): IUseClientActions => {
 
 
   const actions: Record<TClientStatus, { clickAction: (data: IData) => void, leftClickAction: (data: IData) => void }> = {
-    UNKOWN: {
-      clickAction: (data): void => { clickActionDefault(data) },
-      leftClickAction: (): void => notify('El cliente no fue visitado', 'WARN')
-    },
     VISITED: {
-      clickAction: (data): void => { clickActionDefault(data) },
-      leftClickAction: (data): void => leftClickActionDefault(data)
-    },
-    NOVISITED: {
       clickAction: (data): void => { clickActionDefault(data) },
       leftClickAction: (data): void => leftClickActionDefault(data)
     },
@@ -111,10 +103,22 @@ const useClientActions = (): IUseClientActions => {
       clickAction: (data): void => { clickActionDefault(data) },
       leftClickAction: (data): void => leftClickActionDefault(data)
     },
+    NOVISITED: {
+      clickAction: (data): void => { clickActionDefault(data) },
+      leftClickAction: (data): void => leftClickActionDefault(data)
+    },
     PENDING: {
       clickAction: (data): void => { clickActionDefault(data) },
       leftClickAction: (): void => notify('El cliente no fue visitado', 'WARN')
-    }
+    },
+    UNJUSTIFIED: {
+      clickAction: (data): void => { clickActionDefault(data) },
+      leftClickAction: (data): void => { clickActionDefault(data) },
+    },
+    UNKOWN: {
+      clickAction: (data): void => { clickActionDefault(data) },
+      leftClickAction: (): void => notify('El cliente no fue visitado', 'WARN')
+    },
   }
 
   const onClick = (clientStatus: TClientStatus, data: IData) => {

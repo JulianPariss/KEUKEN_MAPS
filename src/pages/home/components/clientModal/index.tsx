@@ -16,7 +16,7 @@ const ClientModal = (props: IProps) => {
             </div>
             <div className="w-full flex justify-between mb-5 flex-row bg-primary-main/10 p-5 rounded-lg mt-2">
                 <p className="text-white">Direccion: {props.address}</p>
-                <p className="text-white/70 text-sm">{props.inRoute ? 'En Ruta' : 'Fuera de Ruta'} | {props.visited ? 'Viistado' : 'No Visitado'}</p>
+                <p className="text-white/70 text-sm">{props.inRoute ? 'En Ruta' : 'Fuera de Ruta'} | {props.visited ? 'Visitado' : 'No Visitado'}</p>
             </div>
         </div>
     )

@@ -1,7 +1,7 @@
 import type { IStandarState } from "../general.types";
 import type { IOrder } from "./sellers.types";
 
-export type TClientStatus = 'UNKOWN' | 'VISITED' | 'NOVISITED' | 'NOSALE' | 'PENDING'
+export type TClientStatus = 'VISITED' | 'NOSALE' | 'NOVISITED' | 'PENDING' | 'UNJUSTIFIED' | 'UNKOWN';
 
 export interface IVisits {
     start: string | Date;
@@ -47,30 +47,32 @@ export interface IClientPortfolio {
 }
 
 export const clientToOrder = (client: IClient): IOrder => {
+    const visitStart = client.visits?.[0]?.start;
+
     return {
-    clientData: {
-        location: client.location,
-        name: client.name,
-        address: client.address,
-        code: client.code,
-        phone: '',
-        inRoute: false
-    },
-    uuid: "",
-    UID_mobile: "",
-    total: 0,
-    totalWithTaxes: 0,
-    noSaleReason: "",
-    noSaleReasonId: 0,
-    closed_lat: "",
-    closed_long: "",
-    open_lat: "",
-    open_long: "",
-    t_created: "",
-    t_closed: "",
-    battery: null,
-    notInRadiusId: null,
-    notInRadiusReason: null,
-    saving_energy_mode: null
-}
-}
+        clientData: {
+            location: client.location,
+            name: client.name,
+            address: client.address,
+            code: client.code,
+            phone: '',
+            inRoute: client.inRoute,
+        },
+        uuid: "",
+        UID_mobile: "",
+        total: 0,
+        totalWithTaxes: 0,
+        noSaleReason: "",
+        noSaleReasonId: 0,
+        closed_lat: "",
+        closed_long: "",
+        open_lat: "",
+        open_long: "",
+        t_created: visitStart ? String(visitStart) : "",
+        t_closed: "",
+        battery: null,
+        notInRadiusId: null,
+        notInRadiusReason: null,
+        saving_energy_mode: null,
+    };
+};

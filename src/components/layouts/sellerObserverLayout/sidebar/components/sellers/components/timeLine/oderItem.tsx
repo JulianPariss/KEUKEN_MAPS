@@ -35,26 +35,30 @@ const OrderItem = (props: IOrderItem) => {
     const notify = useNotifyRef();
 
     const iconsTypes: Record<TClientStatus, { color: string, Icon: ReactNode }> = {
-        UNKOWN: {
-            Icon: <CartCheckIcon className="size-full stroke-white p-2" />,
-            color: THEME_TOKENS.status.info,
-        },
         VISITED: {
             Icon: <CartCheckIcon className="size-full stroke-white p-2" />,
             color: THEME_TOKENS.status.success,
-        },
-        NOVISITED: {
-            Icon: <CartXMarkIcon className="size-full stroke-white p-2" />,
-            color: THEME_TOKENS.status.error,
         },
         NOSALE: {
             Icon: <CartXMarkIcon className="size-full stroke-white p-2" />,
             color: THEME_TOKENS.status.warning,
         },
+        UNJUSTIFIED: {
+            Icon: <CartXMarkIcon className="size-full stroke-white p-2" />,
+            color: THEME_TOKENS.status.warning,
+        },
+        NOVISITED: {
+            Icon: <CartXMarkIcon className="size-full stroke-white p-2" />,
+            color: THEME_TOKENS.status.error,
+        },
         PENDING: {
             Icon: <CartXMarkIcon className="size-full stroke-white p-2" />,
             color: THEME_TOKENS.status.info,
-        }
+        },
+        UNKOWN: {
+            Icon: <CartXMarkIcon className="size-full stroke-white p-2" />,
+            color: THEME_TOKENS.status.info,
+        },
     };
 
     const hanldeClientClick = () => {
@@ -95,6 +99,8 @@ const OrderItem = (props: IOrderItem) => {
     const icon = iconsTypes[clientType];
     const BatteryIcon = batteryToIcon(order.battery);
     const hasExcuse: boolean = order.notInRadiusId !== -1 && !!order.notInRadiusReason;
+    const visitAt = order.t_created || client?.visits?.[0]?.start || null;
+    const visitDuration = formatMinutes(client?.totalMinutes ?? 0);
 
     const isHighlighted = itsHappened(order);
 
@@ -116,12 +122,12 @@ const OrderItem = (props: IOrderItem) => {
                 `}
             >
                 <div className="w-[45px] ml-1 flex flex-col items-center justify-center h-full">
-                    <p className="text-main text-xs font-bold">
-                        {order.t_created ? moment(order.t_created).format('HH:mm:ss') : '--:--:--'}
+                    <p className="text-main text-xs font-bold" title="Hora de visita">
+                        {visitAt ? moment(visitAt).format('HH:mm:ss') : '--:--:--'}
                     </p>
                     <hr className="w-full h-px my-0.5 border-main/15" />
-                    <p className="text-main/70 text-xs text-nowrap ml-0.5" title="Tiempo total en el cliente">
-                        {formatMinutes(client?.totalMinutes ?? 0)}
+                    <p className="text-main/70 text-xs text-nowrap ml-0.5" title="Duración total en el cliente (totalMinutes)">
+                        {visitDuration}
                     </p>
                 </div>
 
