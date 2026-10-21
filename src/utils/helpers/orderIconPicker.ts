@@ -20,7 +20,7 @@ const stallNoVisitedSvgIcon = `<svg viewBox="-6.24 -6.24 36.48 36.48" id="meteor
 export const stallNoVisitedIcon = `data:image/svg+xml;base64,${btoa(stallNoVisitedSvgIcon)}`;
 
 export const getDeliveryClientIcon = (driverColor?: string, isProcessed?: boolean) => {
-    const bgColor = isProcessed ? '#0b7731' : '#0284c7';
+    const bgColor = isProcessed ? '#0b7731' : '#777778';
 
     const deliveryClientSvg = `
         <svg viewBox="${driverColor ? '-10 -10 44 44' : '-6.24 -6.24 36.5 36.5'}" id="meteor-icon-kit__solid-marketplace-stall" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="#000000" stroke-width="0.00024">

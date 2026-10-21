@@ -10,6 +10,7 @@ import invoicesReducer from './slices/driverObserver/invoicesSlice';
 import collectedPaymentsReducer from './slices/driverObserver/collectedPaymentsSlice';
 import visitsReducer from './slices/driverObserver/visitsSlice';
 import rejectedsReducer from './slices/driverObserver/rejectedsSlice';
+import forwardsReducer from './slices/driverObserver/forwardsSlice';
 import geoReducer from './slices/sellerObserver/geozonesSlice';
 import clientsReducer from './slices/sellerObserver/clientsSlice'
 import historyReducer from './slices/sellerObserver/historySlice';
@@ -32,6 +33,7 @@ const appReducer = combineReducers({
     collectedPayments: collectedPaymentsReducer,
     visits: visitsReducer,
     rejecteds: rejectedsReducer,
+    forwards: forwardsReducer,
     geo: geoReducer,
     clients: clientsReducer,
     history: historyReducer,
@@ -97,6 +99,7 @@ const rootReducer = (state: any, action: any) => {
                 collectedPayments: undefined,
                 visits: undefined,
                 rejecteds: undefined,
+                forwards: undefined,
             }
         }
         

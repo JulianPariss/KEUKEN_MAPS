@@ -1,11 +1,16 @@
 import type { IFDeliveryClient } from '@repo/api-contracts/firebase';
-import { useTheme } from '@repo/ui/theme';
 import { formatMoney } from '../../../utils/helpers/formatters';
-import { store } from '../../../store';
-import { evaluatePdvStatus } from '../../../store/slices/driverObserver/invoicesSlice';
+import {
+  getDeliveryClientStatusBadges,
+  getRejectionBadge,
+  hasDeliveryClientRejection,
+  isPartialDeliveryRejection,
+  isTotalDeliveryRejection,
+} from '../../../utils/helpers/deliveryClientStatus';
 
 interface IProps {
   client: IFDeliveryClient;
+  deliveryId?: number;
 }
 
 interface IDayConfig {
@@ -40,20 +45,15 @@ const isValidTime = (time: string | undefined): boolean => {
   return /\d/.test(trimmed) || (trimmed.length > 3 && !/^[\s\-ya]+$/i.test(trimmed));
 };
 
-const DeliveryClientTooltip = ({ client }: IProps) => {
-  useTheme();
-
+const DeliveryClientTooltip = ({ client, deliveryId }: IProps) => {
   const clientId = client.id;
   const locality = [client.city, client.partido, client.province].filter(Boolean).join(' · ');
 
-  const state = store?.getState?.();
-  const date = state?.sidebar?.date;
-  const pdvStatus = date
-    ? evaluatePdvStatus(client.id, date, state) ??
-      (client.clientId && client.clientId !== client.id
-        ? evaluatePdvStatus(client.clientId, date, state)
-        : null)
-    : null;
+  const rejectionBadge = getRejectionBadge(client);
+  const statusBadges = [
+    ...getDeliveryClientStatusBadges(client),
+    ...(rejectionBadge ? [rejectionBadge] : []),
+  ];
 
   // Opening Hours parsing
   const isAllDaysArray = (client.openingHours?.length ?? 0) >= 7;
@@ -89,25 +89,15 @@ const DeliveryClientTooltip = ({ client }: IProps) => {
   ) ?? 0;
 
   const hasInvoices = (client.invoicesCount > 0) || totalInvoicesAmount > 0;
-
-  const isVisited = Boolean(client.isVisited);
-  const isDelivered = Boolean(client.isDelivered);
-
-  let deliveryStatusClass = isDelivered
-    ? 'bg-status-success'
-    : isVisited
-      ? 'bg-status-warning'
-      : 'bg-status-error';
-
-  if (pdvStatus === 'PARTIALLYDELIVERED') {
-    deliveryStatusClass = 'bg-status-warning';
-  } else if (pdvStatus === 'PENDING') {
-    deliveryStatusClass = 'bg-status-info';
-  } else if (pdvStatus === 'DELIVERED') {
-    deliveryStatusClass = 'bg-status-success';
-  } else if (pdvStatus === 'REJECTED') {
-    deliveryStatusClass = 'bg-status-error';
-  }
+  const hasRejection = hasDeliveryClientRejection(client);
+  const isTotalRejection = isTotalDeliveryRejection(client);
+  const isPartialRejection = isPartialDeliveryRejection(client);
+  const rejectedAmount = Number(client.rejectedAmount) || 0;
+  const rejectionAmountLabel = isTotalRejection
+    ? 'Rechazo total'
+    : isPartialRejection
+      ? 'Rechazo parcial'
+      : 'Rechazo';
 
   return (
     <div className="flex flex-col min-w-[300px] max-w-[350px] text-main font-sans">
@@ -118,6 +108,14 @@ const DeliveryClientTooltip = ({ client }: IProps) => {
             <span className="px-1.5 py-0.5 rounded-dx text-[10px] font-mono font-bold bg-focus-500/15 text-focus-300 border border-focus-500/20 shrink-0">
               #{clientId}
             </span>
+            {deliveryId != null && (
+              <span
+                className="px-1.5 py-0.5 rounded-dx text-[10px] font-mono font-bold bg-main/10 text-main/80 border border-main/15 shrink-0"
+                title={`Reparto #${deliveryId}`}
+              >
+                R#{deliveryId}
+              </span>
+            )}
             {client.zone && (
               <span
                 className="px-1.5 py-0.5 rounded-dx text-[10px] font-medium bg-main/5 text-main/70 border border-main/10 shrink-0 truncate max-w-[120px]"
@@ -191,22 +189,24 @@ const DeliveryClientTooltip = ({ client }: IProps) => {
         )}
       </div>
 
-      {/* Estado de Visita y Reparto */}
-      <div className="flex items-center gap-1.5 mb-2">
-        <div
-          className={`px-2 py-1 rounded-dx text-[11px] font-semibold text-variant shadow-xs shrink-0 ${isVisited ? 'bg-status-success' : 'bg-status-error'
-            }`}
-        >
-          PDV: #{client.clientId || clientId}
-        </div>
-        <div
-          className={`px-2.5 py-1 rounded-dx text-[11px] font-semibold text-variant shadow-xs flex-1 truncate ${deliveryStatusClass}`}
-        >
-          {client.name || `Cliente #${clientId}`}
+      {/* deliveryStatus / collectionStatus */}
+      <div className="flex flex-col gap-1.5 mb-2 py-1.5 border-t border-b border-main/10">
+        <span className="text-[10px] uppercase tracking-wider text-main/50 font-semibold">
+          Estado
+        </span>
+        <div className="flex items-center gap-1.5 flex-wrap">
+          {statusBadges.map((badge) => (
+            <span
+              key={badge.key}
+              className={`px-2.5 py-1 rounded-dx text-[11px] font-semibold text-variant shadow-xs border border-white/15 ${badge.className}`}
+            >
+              {badge.label}
+            </span>
+          ))}
         </div>
       </div>
-      {/* Financials: Invoices total & Balance */}
-      {hasInvoices && (
+      {/* Financials: Invoices total & Rejection */}
+      {(hasInvoices || hasRejection) && (
         <div className="flex flex-col gap-1 py-1.5 border-t border-main/10">
           {hasInvoices && (
             <div className="flex justify-between items-center text-xs">
@@ -215,6 +215,16 @@ const DeliveryClientTooltip = ({ client }: IProps) => {
               </span>
               <span className="font-bold font-mono text-status-success text-xs">
                 ${formatMoney(totalInvoicesAmount)}
+              </span>
+            </div>
+          )}
+          {hasRejection && (
+            <div className="flex justify-between items-center text-xs">
+              <span className="text-[10px] font-bold tracking-wider text-status-error uppercase">
+                {rejectionAmountLabel}
+              </span>
+              <span className="font-bold font-mono text-status-error text-xs">
+                ${formatMoney(rejectedAmount)}
               </span>
             </div>
           )}

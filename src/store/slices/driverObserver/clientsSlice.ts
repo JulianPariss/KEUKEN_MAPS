@@ -6,9 +6,15 @@ import { selectVisibleDeliveries } from './deliveriesSlice';
 import { changeEnterprise } from '../userSlice';
 import { changeDate } from '../sidebarSlice';
 
+export const deliveryClientKey = (
+  deliveryId: number | string,
+  clientId: number | string
+): string => `${Number(deliveryId)}_${Number(clientId)}`;
+
 export interface IDeliveryClientsState {
   clients: IFDeliveryClient[];
   clientById: Record<number, IFDeliveryClient>;
+  clientByDeliveryKey: Record<string, IFDeliveryClient>;
   clientIdsByDeliveryId: Record<number, number[]>;
   loading: boolean;
   error: string | null;
@@ -19,18 +25,21 @@ export type TFetchClientsByDeliveriesArgs = IFDeliverie[] | void;
 export interface IFetchClientsByDeliveriesResponse {
   clients: IFDeliveryClient[];
   clientById: Record<number, IFDeliveryClient>;
+  clientByDeliveryKey: Record<string, IFDeliveryClient>;
   clientIdsByDeliveryId: Record<number, number[]>;
 }
 
 export interface ISetDeliveryClientsPayload {
   clients: IFDeliveryClient[];
   clientById: Record<number, IFDeliveryClient>;
+  clientByDeliveryKey: Record<string, IFDeliveryClient>;
   clientIdsByDeliveryId: Record<number, number[]>;
 }
 
 const initialState: IDeliveryClientsState = {
   clients: [],
   clientById: {},
+  clientByDeliveryKey: {},
   clientIdsByDeliveryId: {},
   loading: false,
   error: null,
@@ -51,6 +60,7 @@ export const fetchClientsByDeliveries = createAsyncThunk<
       return {
         clients: [],
         clientById: {},
+        clientByDeliveryKey: {},
         clientIdsByDeliveryId: {},
       };
     }
@@ -80,6 +90,7 @@ export const fetchClientsByDeliveries = createAsyncThunk<
 
       const uniqueClients: IFDeliveryClient[] = [];
       const clientById: Record<number, IFDeliveryClient> = {};
+      const clientByDeliveryKey: Record<string, IFDeliveryClient> = {};
       const clientIdsByDeliveryId: Record<number, number[]> = {};
       const seenClientIds = new Set<number>();
 
@@ -88,12 +99,18 @@ export const fetchClientsByDeliveries = createAsyncThunk<
 
         for (const client of clients) {
           const clientKey = client.id;
+          const key = deliveryClientKey(deliveryId, clientKey);
+          clientByDeliveryKey[key] = client;
+
+          clientById[clientKey] = client;
+          if (client.clientId) clientById[client.clientId] = client;
 
           if (!seenClientIds.has(clientKey)) {
             seenClientIds.add(clientKey);
             uniqueClients.push(client);
-            clientById[clientKey] = client;
-            if (client.clientId) clientById[client.clientId] = client;
+          } else {
+            const idx = uniqueClients.findIndex((c) => c.id === clientKey);
+            if (idx >= 0) uniqueClients[idx] = client;
           }
 
           if (!clientIdsByDeliveryId[deliveryId].includes(clientKey)) {
@@ -105,6 +122,7 @@ export const fetchClientsByDeliveries = createAsyncThunk<
       return {
         clients: uniqueClients,
         clientById,
+        clientByDeliveryKey,
         clientIdsByDeliveryId,
       };
     } catch (error: any) {
@@ -123,6 +141,7 @@ export const deliveryClientsSlice = createSlice({
     setDeliveryClients(state, action: PayloadAction<ISetDeliveryClientsPayload>) {
       state.clients = action.payload.clients;
       state.clientById = action.payload.clientById;
+      state.clientByDeliveryKey = action.payload.clientByDeliveryKey;
       state.clientIdsByDeliveryId = action.payload.clientIdsByDeliveryId;
     },
   },
@@ -138,6 +157,7 @@ export const deliveryClientsSlice = createSlice({
         state.loading = false;
         state.clients = action.payload.clients;
         state.clientById = action.payload.clientById;
+        state.clientByDeliveryKey = action.payload.clientByDeliveryKey;
         state.clientIdsByDeliveryId = action.payload.clientIdsByDeliveryId;
       })
       .addCase(fetchClientsByDeliveries.rejected, (state, action) => {
@@ -151,17 +171,46 @@ export const { resetDeliveryClients, setDeliveryClients } = deliveryClientsSlice
 
 export const selectDeliveryClients = (state: RootState) => state.deliveryClients.clients;
 export const selectDeliveryClientById = (state: RootState) => state.deliveryClients.clientById;
+export const selectClientByDeliveryKey = (state: RootState) => state.deliveryClients.clientByDeliveryKey;
 export const selectClientIdsByDeliveryId = (state: RootState) => state.deliveryClients.clientIdsByDeliveryId;
 export const selectDeliveryClientsLoading = (state: RootState) => state.deliveryClients.loading;
 export const selectDeliveryClientsError = (state: RootState) => state.deliveryClients.error;
+
+export const selectClientForDelivery = (
+  state: RootState,
+  deliveryId: number | string | undefined | null,
+  clientId: number | string | undefined | null
+): IFDeliveryClient | null => {
+  if (deliveryId == null || clientId == null) return null;
+  return state.deliveryClients.clientByDeliveryKey[deliveryClientKey(deliveryId, clientId)] ?? null;
+};
+
+export const selectDeliveryIdsForClient = (
+  state: RootState,
+  clientId: number,
+  fallbackClientId?: number | null
+): number[] => {
+  const ids: number[] = [];
+  const targets = new Set(
+    [clientId, fallbackClientId]
+      .filter((v): v is number => v != null && Number.isFinite(Number(v)))
+      .map(Number)
+  );
+  for (const [dId, cIds] of Object.entries(state.deliveryClients.clientIdsByDeliveryId)) {
+    if (cIds.some((id) => targets.has(Number(id)))) {
+      ids.push(Number(dId));
+    }
+  }
+  return ids;
+};
 
 export const selectVisibleDeliveryClients = createSelector(
   [
     selectVisibleDeliveries,
     (state: RootState) => state.deliveryClients.clientIdsByDeliveryId,
-    (state: RootState) => state.deliveryClients.clientById,
+    (state: RootState) => state.deliveryClients.clientByDeliveryKey,
   ],
-  (visibleDeliveries, clientIdsByDeliveryId, clientById): IFDeliveryClient[] => {
+  (visibleDeliveries, clientIdsByDeliveryId, clientByDeliveryKey): IFDeliveryClient[] => {
     const seenClientIds = new Set<number>();
     const visibleClients: IFDeliveryClient[] = [];
 
@@ -172,7 +221,7 @@ export const selectVisibleDeliveryClients = createSelector(
       for (const clientId of clientIds) {
         if (!seenClientIds.has(clientId)) {
           seenClientIds.add(clientId);
-          const client = clientById[clientId];
+          const client = clientByDeliveryKey[deliveryClientKey(delivery.id, clientId)];
           if (client) {
             visibleClients.push(client);
           }

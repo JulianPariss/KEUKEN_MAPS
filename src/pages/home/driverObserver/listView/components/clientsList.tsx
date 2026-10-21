@@ -4,6 +4,7 @@ import { useAppSelector } from '../../../../../store/hooks';
 import type { IFDeliveryClient } from '@repo/api-contracts/firebase';
 import { LoadingIcon } from '@repo/icons';
 import { formatMoney } from '../../../../../utils/helpers/formatters';
+import { deliveryClientKey } from '../../../../../store/slices/driverObserver/clientsSlice';
 
 type TKPISKeys = 'total' | 'processed' | 'visited' | 'delivered';
 type TVariants = 'danger' | 'warning' | 'ok' | 'info';
@@ -66,7 +67,7 @@ const ClientsList = ({
     title = 'Estado de Clientes y Repartos',
     description = 'Listado y seguimiento del estado de entrega de clientes por reparto.',
 }: IClientsListProps) => {
-    const { clients, clientById, clientIdsByDeliveryId, loading } = useAppSelector(
+    const { clients, clientByDeliveryKey, clientIdsByDeliveryId, loading } = useAppSelector(
         (state) => state.deliveryClients
     );
 
@@ -78,7 +79,8 @@ const ClientsList = ({
             for (const [deliveryIdStr, clientIds] of entries) {
                 const numDeliveryId = Number(deliveryIdStr);
                 for (const clientId of clientIds) {
-                    const client = clientById[clientId];
+                    const client =
+                        clientByDeliveryKey[deliveryClientKey(numDeliveryId, clientId)];
                     if (!client) continue;
 
                     const totalAmount = (client.invoicesTotal || []).reduce(
@@ -111,7 +113,7 @@ const ClientsList = ({
         }
 
         return result;
-    }, [clientIdsByDeliveryId, clientById, clients]);
+    }, [clientIdsByDeliveryId, clientByDeliveryKey, clients]);
 
     const stats = useMemo(() => {
         let processed = 0;

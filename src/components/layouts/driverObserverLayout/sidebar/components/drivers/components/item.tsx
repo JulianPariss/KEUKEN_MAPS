@@ -18,6 +18,7 @@ import DotsLoader from "../../../../../components/dotsLoader";
 import { useContextbarContext } from "../../../../../../../utils/contexts/contextbar.context";
 import TimeLine from "./timeLine";
 import type { IFDeliverie } from "@repo/api-contracts/firebase";
+import { deliveryClientKey } from "../../../../../../../store/slices/driverObserver/clientsSlice";
 
 interface ISellerItem extends IMobileUser {
     isWatched: boolean;
@@ -94,7 +95,7 @@ const Item = (props: ISellerItem) => {
     const hasRoute = points.length > 0;
 
     const { toggle, openKey } = useContextbarContext();
-    const { clientIdsByDeliveryId, clientById } = useAppSelector((state) => state.deliveryClients);
+    const { clientIdsByDeliveryId, clientByDeliveryKey } = useAppSelector((state) => state.deliveryClients);
 
     const { watchList, animation } = useAppSelector((state) => state.drivers);
     const [isPaused, setIsPaused] = useState<boolean>(false);
@@ -119,7 +120,7 @@ const Item = (props: ISellerItem) => {
         const deliveryClientIds = clientIdsByDeliveryId[delivery.id] || [];
         const clientCoords: [number, number][] = deliveryClientIds
             .map((cid) => {
-                const c = clientById[cid];
+                const c = clientByDeliveryKey[deliveryClientKey(delivery.id, cid)];
                 if (c?.location?.latitude && c?.location?.longitude) {
                     const lat = Number(c.location.latitude);
                     const lng = Number(c.location.longitude);
@@ -161,7 +162,7 @@ const Item = (props: ISellerItem) => {
         const deliveryClientIds = clientIdsByDeliveryId[delivery.id] || [];
         const clientCoords: [number, number][] = deliveryClientIds
             .map((cid) => {
-                const c = clientById[cid];
+                const c = clientByDeliveryKey[deliveryClientKey(delivery.id, cid)];
                 if (c?.location?.latitude && c?.location?.longitude) {
                     const lat = Number(c.location.latitude);
                     const lng = Number(c.location.longitude);

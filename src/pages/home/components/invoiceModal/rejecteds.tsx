@@ -5,8 +5,6 @@ import type {
 } from '@repo/api-contracts/firebase';
 import { useAppDispatch, useAppSelector } from '../../../../store/hooks';
 import {
-  selectIsRejectedsLoading,
-  selectRejectedsByDeliveryAndClient,
   selectReturnReasons,
   selectReturnReasonDescription,
 } from '../../../../store/selectors/rejecteds.selector';
@@ -16,10 +14,17 @@ import Empty from '../../../../components/empty';
 import Spinner from '../../../../components/spinner';
 import { ArrowIcon, CrossIcon } from '@repo/icons';
 import moment from 'moment';
+import { DeliveryBulletPager } from './components/DeliveryBulletPager';
 
 interface IProps {
   client: IFDeliveryClient;
+  deliveryIds?: number[];
   deliveryId?: number;
+}
+
+interface IRejectedsByDelivery {
+  deliveryId: number;
+  rejecteds: IFRejected[];
 }
 
 interface IRejectedCardProps {
@@ -209,40 +214,85 @@ const RejectedCard = ({ rejected }: IRejectedCardProps) => {
   );
 };
 
-export const RejectedsTab = ({ client, deliveryId: propDeliveryId }: IProps) => {
+export const RejectedsTab = ({
+  client,
+  deliveryIds: propDeliveryIds,
+  deliveryId: propDeliveryId,
+}: IProps) => {
   const dispatch = useAppDispatch();
-  const returnReasons = useAppSelector(selectReturnReasons);
+  const hasReturnReasons = useAppSelector(
+    (state) => Object.keys(selectReturnReasons(state)).length > 0
+  );
 
   useEffect(() => {
-    if (Object.keys(returnReasons).length === 0) {
+    if (!hasReturnReasons) {
       dispatch(fetchReturnReasons());
     }
-  }, [dispatch, returnReasons]);
+  }, [dispatch, hasReturnReasons]);
 
   const { clientIdsByDeliveryId } = useAppSelector((state) => state.deliveryClients);
   const targetClientId = client.id;
   const fallbackClientId = client.clientId;
 
-  const resolvedDeliveryId = useMemo(() => {
-    if (propDeliveryId) return propDeliveryId;
+  const deliveryIdsKey = useMemo(() => {
+    if (propDeliveryIds && propDeliveryIds.length > 0) {
+      return [...propDeliveryIds].sort((a, b) => a - b).join(',');
+    }
+    if (propDeliveryId != null) return String(propDeliveryId);
+
+    const found: number[] = [];
     for (const [dId, cIds] of Object.entries(clientIdsByDeliveryId)) {
       if (
         cIds.includes(client.id) ||
         (client.clientId && cIds.includes(client.clientId))
       ) {
-        return Number(dId);
+        found.push(Number(dId));
       }
     }
-    return undefined;
-  }, [propDeliveryId, client.id, client.clientId, clientIdsByDeliveryId]);
+    return found.sort((a, b) => a - b).join(',');
+  }, [propDeliveryIds, propDeliveryId, client.id, client.clientId, clientIdsByDeliveryId]);
 
-  const rejecteds = useAppSelector((state) =>
-    selectRejectedsByDeliveryAndClient(state, resolvedDeliveryId, targetClientId, fallbackClientId)
+  const deliveryIds = useMemo(
+    () => (deliveryIdsKey ? deliveryIdsKey.split(',').map(Number) : []),
+    [deliveryIdsKey]
   );
 
-  const isLoading = useAppSelector((state) =>
-    selectIsRejectedsLoading(state, resolvedDeliveryId, targetClientId, fallbackClientId)
+  const [currentDeliveryId, setCurrentDeliveryId] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (deliveryIds.length === 0) {
+      setCurrentDeliveryId(null);
+      return;
+    }
+    setCurrentDeliveryId((prev) =>
+      prev != null && deliveryIds.includes(prev) ? prev : deliveryIds[0]
+    );
+  }, [deliveryIdsKey]); 
+
+  const rejectedsByDeliveryId = useAppSelector(
+    (state) => state.rejecteds?.rejectedsByDeliveryId
   );
+  const loadingByDeliveryId = useAppSelector(
+    (state) => state.rejecteds?.loadingByDeliveryId
+  );
+
+  const groups = useMemo((): IRejectedsByDelivery[] => {
+    const targetIds = [targetClientId, fallbackClientId]
+      .filter((id): id is number => id != null)
+      .map(Number);
+
+    return deliveryIds.map((deliveryId) => {
+      const list = rejectedsByDeliveryId?.[deliveryId] || [];
+      const rejecteds = list.filter((r) => targetIds.includes(Number(r.clientId)));
+      return { deliveryId, rejecteds };
+    });
+  }, [deliveryIds, rejectedsByDeliveryId, targetClientId, fallbackClientId]);
+
+  const activeDeliveryId = currentDeliveryId ?? deliveryIds[0];
+  const activeGroup = groups.find((g) => g.deliveryId === activeDeliveryId);
+  const rejecteds = activeGroup?.rejecteds ?? [];
+
+  const isLoading = deliveryIds.some((dId) => Boolean(loadingByDeliveryId?.[dId]));
 
   const totals = useMemo(() => {
     let rejected = 0;
@@ -270,7 +320,7 @@ export const RejectedsTab = ({ client, deliveryId: propDeliveryId }: IProps) => 
     );
   }
 
-  if (!resolvedDeliveryId) {
+  if (deliveryIds.length === 0 || activeDeliveryId == null) {
     return (
       <div className="bg-primary-950/40 backdrop-blur-xl border border-main/10 rounded-dx p-6 mt-1 flex justify-center items-center h-[280px]">
         <Empty text="No se pudo identificar el reparto asociado a este cliente." />
@@ -278,39 +328,54 @@ export const RejectedsTab = ({ client, deliveryId: propDeliveryId }: IProps) => 
     );
   }
 
-  if (!rejecteds || rejecteds.length === 0) {
-    return (
-      <div className="bg-primary-950/40 backdrop-blur-xl border border-main/10 rounded-dx p-6 mt-2 flex justify-center items-center h-[280px]">
-        <Empty text={`No se registraron devoluciones para el reparto #${resolvedDeliveryId}.`} />
-      </div>
-    );
-  }
-
   return (
-    <div className="flex flex-col gap-3 overflow-y-auto overflow-x-hidden h-[450px] md:h-[350px] pr-1 mt-1">
-      <div className="w-full flex items-center justify-between px-3.5 py-2 bg-primary-950/50 backdrop-blur-md border border-main/10 rounded-dx text-xs">
-        <div className="flex items-center gap-x-5">
-          <span className="text-main/60">
-            Devoluciones: <strong className="text-main font-mono font-bold">{totals.count}</strong>
-          </span>
-          <span className="text-main/60">
-            Total Rechazado:{' '}
-            <strong className="text-error font-mono font-bold">
-              ${formatMoney(totals.rejected)}
-            </strong>
-          </span>
+    <div className="flex flex-col mt-1">
+      <div className="flex flex-col gap-3 overflow-y-auto overflow-x-hidden h-[450px] md:h-[350px] pr-1">
+        <div className="w-full flex items-center justify-between px-3.5 py-2 bg-primary-950/50 backdrop-blur-md border border-main/10 rounded-dx text-xs">
+          <div className="flex items-center gap-x-5">
+            <span className="text-main/60">
+              Devoluciones:{' '}
+              <strong className="text-main font-mono font-bold">{totals.count}</strong>
+            </span>
+            <span className="text-main/60">
+              Total Rechazado:{' '}
+              <strong className="text-error font-mono font-bold">
+                ${formatMoney(totals.rejected)}
+              </strong>
+            </span>
+          </div>
+
+          <div className="text-right text-xs text-main/50 shrink-0">
+            Reparto{' '}
+            <span className="font-mono text-focus-300 font-bold">#{activeDeliveryId}</span>
+            {deliveryIds.length > 1 && (
+              <span className="text-main/40 ml-1.5">
+                ({deliveryIds.indexOf(activeDeliveryId) + 1}/{deliveryIds.length})
+              </span>
+            )}
+          </div>
         </div>
 
-        <div className="text-right text-xs text-main/50 shrink-0">
-          Reparto <span className="font-mono text-focus-300 font-bold">#{resolvedDeliveryId}</span>
-        </div>
+        {rejecteds.length === 0 ? (
+          <div className="bg-primary-950/40 backdrop-blur-xl border border-main/10 rounded-dx p-6 flex justify-center items-center h-[280px]">
+            <Empty
+              text={`No se registraron devoluciones para el reparto #${activeDeliveryId}.`}
+            />
+          </div>
+        ) : (
+          <div className="flex flex-col gap-3 pb-1">
+            {rejecteds.map((p, idx) => (
+              <RejectedCard key={p.id || `${activeDeliveryId}_${idx}`} rejected={p} />
+            ))}
+          </div>
+        )}
       </div>
 
-      <div className="flex flex-col gap-3 pb-3">
-        {rejecteds.map((p, idx) => (
-          <RejectedCard key={p.id || idx} rejected={p} />
-        ))}
-      </div>
+      <DeliveryBulletPager
+        deliveryIds={deliveryIds}
+        currentDeliveryId={activeDeliveryId}
+        onChange={setCurrentDeliveryId}
+      />
     </div>
   );
 };

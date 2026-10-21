@@ -1,4 +1,5 @@
 import { useEffect, useMemo } from 'react';
+import { shallowEqual } from 'react-redux';
 import type { IFDeliveryClient } from '@repo/api-contracts/firebase';
 import { GenericTabs, type ITabItem } from '@repo/custom-components';
 import { useTheme } from '@repo/ui/theme';
@@ -7,6 +8,7 @@ import {
   fetchInvoicesByPdv,
   selectInvoicesByPdvAndDate,
 } from '../../../../store/slices/driverObserver/invoicesSlice';
+import { selectDeliveryIdsForClient } from '../../../../store/slices/driverObserver/clientsSlice';
 
 import { selectRejectedsByDeliveryAndClient } from '../../../../store/selectors/rejecteds.selector';
 import { fetchRejectedsByClient } from '../../../../store/slices/driverObserver/rejectedsSlice';
@@ -14,9 +16,14 @@ import InvoicePreview from './invoicePreview';
 import InvoiceDetail from './invoiceDetail';
 import CollectedPaymentsTab from './collectedPayments';
 import RejectedsTab from './rejecteds';
+import ForwardsTab from './forwards';
 import moment from 'moment';
 import { selectCollectedPaymentsByDeliveryAndClient } from '../../../../store/selectors/collectedPayments.selector';
 import { fetchCollectedPaymentsByDelivery } from '../../../../store/slices/driverObserver/collectedPaymentsSlice';
+import {
+  fetchForwardsByClient,
+  fetchForwardsByDelivery,
+} from '../../../../store/slices/driverObserver/forwardsSlice';
 
 export interface IInvoiceModalProps {
   client: IFDeliveryClient;
@@ -34,92 +41,128 @@ const InvoiceModal = ({ client, deliveryId: propDeliveryId }: IInvoiceModalProps
   const { date } = useAppSelector((state) => state.sidebar);
   const formattedDate = moment(date).format('YYYY-MM-DD');
 
-  const { clientIdsByDeliveryId } = useAppSelector((state) => state.deliveryClients);
-
-  // Resolver el ID del reparto actual
-  const resolvedDeliveryId = useMemo(() => {
-    if (propDeliveryId) return propDeliveryId;
-    for (const [dId, cIds] of Object.entries(clientIdsByDeliveryId)) {
-      if (
-        cIds.includes(client.id) ||
-        (client.clientId && cIds.includes(client.clientId))
-      ) {
-        return Number(dId);
-      }
-    }
-    return undefined;
-  }, [propDeliveryId, client.id, client.clientId, clientIdsByDeliveryId]);
-
-  // Buscar si ya existen facturas en el slice para este pdv (client.id) y fecha
   const invoices = useAppSelector((state) =>
     selectInvoicesByPdvAndDate(state, pdvId, formattedDate)
   );
 
-  // Buscar cobros asociados al reparto y cliente
-  const collectedPayments = useAppSelector((state) =>
-    selectCollectedPaymentsByDeliveryAndClient(state, resolvedDeliveryId, targetClientId, fallbackClientId)
+  const deliveryIdsFromIndex = useAppSelector(
+    (state) => selectDeliveryIdsForClient(state, targetClientId, fallbackClientId),
+    shallowEqual
   );
 
-  const rejecteds = useAppSelector((state) =>
-    selectRejectedsByDeliveryAndClient(state, resolvedDeliveryId, targetClientId, fallbackClientId)
-  );
-  // Al abrir el modal, si no están en caché las facturas o cobros, disparar la consulta
+  /** Union estable: índice + facturas PDV+fecha + prop. */
+  const deliveryIds = useMemo(() => {
+    const set = new Set<number>();
+    for (const id of deliveryIdsFromIndex) {
+      if (Number.isFinite(id)) set.add(Number(id));
+    }
+    for (const inv of invoices) {
+      const dId = Number(inv.deliveryId);
+      if (Number.isFinite(dId) && dId > 0) set.add(dId);
+    }
+    if (propDeliveryId != null && Number.isFinite(propDeliveryId)) {
+      set.add(Number(propDeliveryId));
+    }
+    return Array.from(set).sort((a, b) => a - b);
+  }, [deliveryIdsFromIndex, invoices, propDeliveryId]);
+
+  const deliveryIdsKey = deliveryIds.join(',');
+
+  const collectedCount = useAppSelector((state) => {
+    let count = 0;
+    for (const dId of deliveryIds) {
+      count += selectCollectedPaymentsByDeliveryAndClient(
+        state,
+        dId,
+        targetClientId,
+        fallbackClientId
+      ).length;
+    }
+    return count;
+  });
+
+  const rejectedsCount = useAppSelector((state) => {
+    let count = 0;
+    for (const dId of deliveryIds) {
+      count += selectRejectedsByDeliveryAndClient(
+        state,
+        dId,
+        targetClientId,
+        fallbackClientId
+      ).length;
+    }
+    return count;
+  });
+
+  const forwardedCount = useAppSelector((state) => {
+    const targetIds = [targetClientId, fallbackClientId]
+      .filter((id): id is number => id != null)
+      .map(Number);
+    let count = 0;
+    for (const dId of deliveryIds) {
+      const list = state.forwards?.forwardsByDeliveryId?.[dId] || [];
+      count += list.filter((f) => targetIds.includes(Number(f.clientId))).length;
+    }
+    return count;
+  });
+
   useEffect(() => {
-    if (!invoices || invoices.length === 0) {
-      dispatch(
-        fetchInvoicesByPdv({
-          pdvId,
-          date: formattedDate,
-        })
-      );
-    }
-    if (resolvedDeliveryId) {
-      dispatch(
-        fetchCollectedPaymentsByDelivery({
-          deliveryId: resolvedDeliveryId,
-        })
-      );
-      dispatch(
-        fetchRejectedsByClient({
-          deliveryId: resolvedDeliveryId,
-          clientId: targetClientId,
-          fallbackClientId,
-        })
-      );
-    } else {
-      dispatch(
-        fetchRejectedsByClient({
-          clientId: targetClientId,
-          fallbackClientId,
-        })
-      );
-    }
-  }, [pdvId, formattedDate, resolvedDeliveryId, targetClientId, fallbackClientId, dispatch]);
+    dispatch(
+      fetchInvoicesByPdv({
+        pdvId,
+        date: formattedDate,
+      })
+    );
+  }, [pdvId, formattedDate, dispatch]);
 
+  useEffect(() => {
+    if (!deliveryIdsKey) {
+      dispatch(
+        fetchRejectedsByClient({
+          clientId: targetClientId,
+          fallbackClientId,
+        })
+      );
+      dispatch(
+        fetchForwardsByClient({
+          clientId: targetClientId,
+          fallbackClientId,
+        })
+      );
+      return;
+    }
+
+    const ids = deliveryIdsKey.split(',').map(Number);
+    for (const deliveryId of ids) {
+      dispatch(fetchCollectedPaymentsByDelivery({ deliveryId }));
+      dispatch(fetchForwardsByDelivery({ deliveryId }));
+      dispatch(
+        fetchRejectedsByClient({
+          deliveryId,
+          clientId: targetClientId,
+          fallbackClientId,
+        })
+      );
+    }
+  }, [deliveryIdsKey, targetClientId, fallbackClientId, dispatch]);
 
   const invoicesBadge =
-    invoices && invoices.length > 0
+    invoices.length > 0
       ? ` (${invoices.length})`
       : client.invoicesCount > 0
         ? ` (${client.invoicesCount})`
         : '';
 
-  const collectedBadge =
-    collectedPayments && collectedPayments.length > 0
-      ? ` (${collectedPayments.length})`
-      : '';
-
-  const rejectedsBadge =
-    rejecteds && rejecteds.length > 0
-      ? ` (${rejecteds.length})`
-      : '';
+  const collectedBadge = collectedCount > 0 ? ` (${collectedCount})` : '';
+  const rejectedsBadge = rejectedsCount > 0 ? ` (${rejectedsCount})` : '';
+  const forwardedBadge = forwardedCount > 0 ? ` (${forwardedCount})` : '';
 
   const tabs: ITabItem[] = useMemo(
     () => [
       {
         id: 'general',
         label: 'Datos Generales',
-        content: <InvoicePreview client={client} />,
+        content: <InvoicePreview client={client} deliveryIds={deliveryIds} />,
       },
       {
         id: 'invoices',
@@ -129,15 +172,22 @@ const InvoiceModal = ({ client, deliveryId: propDeliveryId }: IInvoiceModalProps
       {
         id: 'collectedPayments',
         label: `Cobros${collectedBadge}`,
-        content: <CollectedPaymentsTab client={client} deliveryId={resolvedDeliveryId} />,
+        content: <CollectedPaymentsTab client={client} deliveryIds={deliveryIds} />,
       },
       {
         id: 'rejecteds',
         label: `Devoluciones${rejectedsBadge}`,
-        content: <RejectedsTab client={client} deliveryId={resolvedDeliveryId} />,
+        content: <RejectedsTab client={client} deliveryIds={deliveryIds} />,
+      },
+      {
+        id: 'reprogramaciones',
+        label: `Reprogramaciones${forwardedBadge}`,
+        content: (
+          <ForwardsTab client={client} deliveryIds={deliveryIds} />
+        ),
       },
     ],
-    [client, invoicesBadge, collectedBadge, rejectedsBadge, resolvedDeliveryId]
+    [client, invoicesBadge, collectedBadge, rejectedsBadge, forwardedBadge, deliveryIds]
   );
 
   return (

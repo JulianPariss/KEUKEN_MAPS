@@ -11,6 +11,9 @@ import {
   resolveVisitForClient,
   selectVisitByDeliveryClientKey,
 } from '../../../../../../../../store/slices/driverObserver/visitsSlice';
+import {
+  deliveryClientKey,
+} from '../../../../../../../../store/slices/driverObserver/clientsSlice';
 import type { IFVisit } from '@repo/api-contracts/firebase';
 
 interface ITimeLineProps {
@@ -30,6 +33,16 @@ const TimeDivider = ({ isActive, isShort = false }: { isActive: boolean; isShort
   />
 );
 
+const DaySeparator = ({ dateLabel }: { dateLabel: string }) => (
+  <div className="w-full flex items-center gap-2.5 py-1.5 px-1 relative z-20">
+    <div className="flex-1 h-px bg-main/20" />
+    <span className="text-[10px] font-semibold tracking-wide text-focus-300 uppercase whitespace-nowrap">
+      {dateLabel}
+    </span>
+    <div className="flex-1 h-px bg-main/20" />
+  </div>
+);
+
 const getClientVisitTime = (
   client: IFDeliveryClient,
   deliveryId: number,
@@ -39,10 +52,22 @@ const getClientVisitTime = (
   return resolveVisitForClient(visitByKey, deliveryId, client)?.visitTime || null;
 };
 
+const getVisitDayKey = (visitTime: string | null) => {
+  if (!visitTime) return null;
+  const day = moment(visitTime);
+  return day.isValid() ? day.format('YYYY-MM-DD') : null;
+};
+
+const getVisitDayLabel = (visitTime: string | null) => {
+  if (!visitTime) return null;
+  const day = moment(visitTime);
+  return day.isValid() ? day.format('DD/MM/YYYY') : null;
+};
+
 const TimeLine = ({ delivery, driverId }: ITimeLineProps) => {
   const { currentProgress, startTime } = useMapTime();
   const { isAnimating, driverAnimated } = useAppSelector((state) => state.drivers.animation);
-  const { clientIdsByDeliveryId, clientById, loading } = useAppSelector(
+  const { clientIdsByDeliveryId, clientByDeliveryKey, loading } = useAppSelector(
     (state) => state.deliveryClients
   );
   const visitByKey = useAppSelector(selectVisitByDeliveryClientKey);
@@ -51,10 +76,11 @@ const TimeLine = ({ delivery, driverId }: ITimeLineProps) => {
   const isDriverAnimating = isAnimating && driverAnimated === driverId;
 
   // 1) horario de visita · 2) procesados sin visita · 3) index (pendientes)
+  // Resolve each stop from the delivery-scoped client doc (not the global dedupe).
   const sortedClients = useMemo(() => {
     const clientIds = clientIdsByDeliveryId[delivery.id] || [];
     const list = clientIds
-      .map((id) => clientById[id])
+      .map((id) => clientByDeliveryKey[deliveryClientKey(delivery.id, id)])
       .filter((c): c is IFDeliveryClient => Boolean(c));
 
     return list.slice().sort((a, b) => {
@@ -81,7 +107,7 @@ const TimeLine = ({ delivery, driverId }: ITimeLineProps) => {
       if (b.index != null) return 1;
       return 0;
     });
-  }, [clientIdsByDeliveryId, clientById, delivery.id, visitByKey]);
+  }, [clientIdsByDeliveryId, clientByDeliveryKey, delivery.id, visitByKey]);
 
   const itsHappened = (visitTime: string | null) => {
     if (!visitTime || !isDriverAnimating) return false;
@@ -154,12 +180,32 @@ const TimeLine = ({ delivery, driverId }: ITimeLineProps) => {
 
         {sortedClients.map((client, index) => {
           const visitTime = getClientVisitTime(client, delivery.id, visitByKey);
+          const prevVisitTime =
+            index > 0
+              ? getClientVisitTime(sortedClients[index - 1], delivery.id, visitByKey)
+              : null;
+          const nextVisitTime =
+            index < sortedClients.length - 1
+              ? getClientVisitTime(sortedClients[index + 1], delivery.id, visitByKey)
+              : null;
+          const currentDay = getVisitDayKey(visitTime);
+          const previousDay = getVisitDayKey(prevVisitTime);
+          const nextDay = getVisitDayKey(nextVisitTime);
+          const dayLabel = getVisitDayLabel(visitTime);
+          const showDaySeparator = Boolean(
+            dayLabel && currentDay && previousDay && currentDay !== previousDay
+          );
+          const dayChangesAfter = Boolean(
+            currentDay && nextDay && currentDay !== nextDay
+          );
+          const showTimeDivider = index < sortedClients.length - 1 && !dayChangesAfter;
           const happened = itsHappened(visitTime);
           const timed = itsTimed(visitTime);
           const isActive = happened || !isDriverAnimating;
 
           return (
             <div key={client.id || client.clientId || index} className="w-full">
+              {showDaySeparator && dayLabel ? <DaySeparator dateLabel={dayLabel} /> : null}
               <ClientItem
                 client={client}
                 index={index}
@@ -170,9 +216,9 @@ const TimeLine = ({ delivery, driverId }: ITimeLineProps) => {
                 isHighlighted={happened}
                 isActive={isActive}
               />
-              <div className="w-full flex justify-between">
-                <div className="w-full relative h-[20px] z-10">
-                  {sortedClients.length - 1 > index ? (
+              {showTimeDivider ? (
+                <div className="w-full flex justify-between">
+                  <div className="w-full relative h-[20px] z-10">
                     <TimeDivider
                       isActive={
                         isDriverAnimating
@@ -180,9 +226,9 @@ const TimeLine = ({ delivery, driverId }: ITimeLineProps) => {
                           : Boolean(client.isProcessed)
                       }
                     />
-                  ) : null}
+                  </div>
                 </div>
-              </div>
+              ) : null}
             </div>
           );
         })}

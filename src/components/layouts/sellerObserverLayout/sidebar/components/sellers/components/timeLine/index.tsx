@@ -5,7 +5,6 @@ import { getClientType, shouldListClientInTimeline } from "../../../../../../../
 import { useCallback, useEffect, useMemo, useState } from "react";
 import GpsItem from "./gpsItem";
 import OrderItem from "./oderItem";
-import {  } from "../../../../../../../../utils/hooks/map/useContextRef";
 import moment from "moment";
 import { useAppSelector } from "../../../../../../../../store/hooks";
 import { formatMoney } from "../../../../../../../../utils/helpers/formatters";
@@ -34,6 +33,16 @@ const TimeDivider = ({ isActive, isShort = false }: { isActive: boolean, isShort
     `} />
 );
 
+const DaySeparator = ({ dateLabel }: { dateLabel: string }) => (
+    <div className="w-full flex items-center gap-2.5 py-1.5 px-1 relative z-20">
+        <div className="flex-1 h-px bg-main/20" />
+        <span className="text-[10px] font-semibold tracking-wide text-focus-300 uppercase whitespace-nowrap">
+            {dateLabel}
+        </span>
+        <div className="flex-1 h-px bg-main/20" />
+    </div>
+);
+
 const TimeLine = (props: IProps) => {
     const { currentProgress, startTime } = useMapTime();
     const { isAnimating, sellerAnimated } = useAppSelector((state) => state.sellers.animation);
@@ -49,6 +58,20 @@ const TimeLine = (props: IProps) => {
         if (!raw) return Number.POSITIVE_INFINITY;
         const time = new Date(raw).getTime();
         return Number.isNaN(time) ? Number.POSITIVE_INFINITY : time;
+    };
+
+    const getEventDayKey = (item: ITimeList) => {
+        const raw = item.ORDER?.t_created || item.GPS?.timestamp || '';
+        if (!raw) return null;
+        const day = moment(raw);
+        return day.isValid() ? day.format('YYYY-MM-DD') : null;
+    };
+
+    const getDaySeparatorLabel = (item: ITimeList) => {
+        const raw = item.ORDER?.t_created || item.GPS?.timestamp || '';
+        if (!raw) return null;
+        const day = moment(raw);
+        return day.isValid() ? day.format('DD/MM/YYYY') : null;
     };
 
     const sortTimeLine = () => {
@@ -134,12 +157,27 @@ const TimeLine = (props: IProps) => {
             <div className="h-fit w-full flex flex-col justify-center items-center mt-4 px-4">
                 {sortedEvents ?
                     sortedEvents.slice().map((timeItem, index) => {
+                        const prevItem = index > 0 ? sortedEvents[index - 1] : null;
+                        const nextItem = index < sortedEvents.length - 1 ? sortedEvents[index + 1] : null;
+                        const currentDay = getEventDayKey(timeItem);
+                        const previousDay = prevItem ? getEventDayKey(prevItem) : null;
+                        const nextDay = nextItem ? getEventDayKey(nextItem) : null;
+                        const dayLabel = getDaySeparatorLabel(timeItem);
+                        const showDaySeparator = Boolean(
+                            dayLabel && currentDay && previousDay && currentDay !== previousDay
+                        );
+                        const dayChangesAfter = Boolean(
+                            currentDay && nextDay && currentDay !== nextDay
+                        );
+                        const showTimeDivider = index < sortedEvents.length - 1 && !dayChangesAfter;
+
                         if (timeItem.key === 'ORDER' && timeItem.ORDER) {
                             const order = timeItem.ORDER;
                             const client = getClientFromOrder(order);
                             const clType = client ? getClientType(client) : 'PENDING';
                             return (
                                 <div key={`${order.uuid || order.clientData?.code || 'order'}-${index}`} className="w-full">
+                                    {showDaySeparator && dayLabel ? <DaySeparator dateLabel={dayLabel} /> : null}
                                     <OrderItem
                                         order={order}
                                         seller={seller}
@@ -149,25 +187,28 @@ const TimeLine = (props: IProps) => {
                                         isActive={itsHappened(order) || !isAnimating}
                                         client={client}
                                     />
-                                    <div className="w-full flex justify-between">
-                                        <div className="w-full relative h-[20px] z-10">
-                                            {sortedEvents.length - 1 > index ?
-                                                <TimeDivider isActive={itsHappened(order) || !isAnimating && clType !== 'PENDING'} /> : null
-                                            }
+                                    {showTimeDivider ? (
+                                        <div className="w-full flex justify-between">
+                                            <div className="w-full relative h-[20px] z-10">
+                                                <TimeDivider isActive={itsHappened(order) || !isAnimating && clType !== 'PENDING'} />
+                                            </div>
                                         </div>
-                                    </div>
+                                    ) : null}
                                 </div>
                             );
                         } else if (timeItem.key === 'GPS' && timeItem.GPS) {
                             const gps = timeItem.GPS;
                             return (
                                 <div key={`${gps.id}-${index}`} className="w-full">
+                                    {showDaySeparator && dayLabel ? <DaySeparator dateLabel={dayLabel} /> : null}
                                     <GpsItem gps={gps} />
-                                    <div className="w-full flex justify-between">
-                                        <div className="w-full relative h-[20px] z-10">
-                                            {sortedEvents.length - 1 > index ? <TimeDivider isActive={true} isShort={true} /> : null}
+                                    {showTimeDivider ? (
+                                        <div className="w-full flex justify-between">
+                                            <div className="w-full relative h-[20px] z-10">
+                                                <TimeDivider isActive={true} isShort={true} />
+                                            </div>
                                         </div>
-                                    </div>
+                                    ) : null}
                                 </div>
                             );
                         }

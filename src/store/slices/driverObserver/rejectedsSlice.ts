@@ -362,8 +362,10 @@ export const selectRejectedsByDeliveryIdMap = (state: RootState): Record<number,
   state.rejecteds.rejectedsByDeliveryId;
 export const selectRejectedsByClientKeyMap = (state: RootState): Record<string, IFRejected[]> =>
   state.rejecteds.rejectedsByClientKey;
+const EMPTY_RETURN_REASONS: Record<string, IFRejectReason> = {};
+
 export const selectReturnReasons = (state: RootState): Record<string, IFRejectReason> =>
-  state.rejecteds?.returnReasons || {};
+  state.rejecteds?.returnReasons ?? EMPTY_RETURN_REASONS;
 export const selectReturnReasonByCode = (
   state: RootState,
   code?: string | null

@@ -499,6 +499,8 @@ export const invoicesSlice = createSlice({
 
 export const { resetInvoices, clearInvoicesCacheForPdv, setInvoicesForPdvDate } = invoicesSlice.actions;
 
+const EMPTY_INVOICES: IFInvoice[] = [];
+
 export const selectInvoicesByPdvAndDate = (
   state: RootState,
   pdvId: number,
@@ -507,7 +509,7 @@ export const selectInvoicesByPdvAndDate = (
   const targetDate = date
     ? moment(date).format('YYYY-MM-DD')
     : moment(state.sidebar.date).format('YYYY-MM-DD');
-  return state.invoices?.invoicesByPdvDate?.[buildPdvDateKey(pdvId, targetDate)] || [];
+  return state.invoices?.invoicesByPdvDate?.[buildPdvDateKey(pdvId, targetDate)] ?? EMPTY_INVOICES;
 };
 
 export const selectIsInvoicesLoadingForPdv = (

@@ -20,6 +20,12 @@ import {
   selectVisitsByDeliveryId,
 } from '../../../../../../../../store/slices/driverObserver/visitsSlice';
 import { batteryToIcon, formatMoney } from '../../../../../../../../utils/helpers/formatters';
+import {
+  getDeliveryClientStatusBadges,
+  hasDeliveryClientRejection,
+  isPartialDeliveryRejection,
+  isTotalDeliveryRejection,
+} from '../../../../../../../../utils/helpers/deliveryClientStatus';
 import InvoiceModal from '../../../../../../../../pages/home/components/invoiceModal';
 
 interface IClientItemProps {
@@ -150,13 +156,25 @@ const ClientItem = ({
   };
 
   const stopNumber = client.index != null ? client.index : index + 1;
+  const statusBadges = getDeliveryClientStatusBadges(client);
+  const hasRejection = hasDeliveryClientRejection(client);
+  const isTotalRejection = isTotalDeliveryRejection(client);
+  const isPartialRejection = isPartialDeliveryRejection(client);
+  const rejectedAmount = Number(client.rejectedAmount) || 0;
+
+  const showRejectionChip = isPartialRejection;
+  const rejectionAmountLabel = isTotalRejection
+    ? 'rechazo total'
+    : isPartialRejection
+      ? 'rechazo parcial'
+      : 'rechazo';
 
   return (
     <div ref={itemRef}>
     <div
       onClick={handleClientClick}
       className={`
-        w-full h-[80px] flex items-center justify-between px-2 bg-primary-950/40 hover:bg-primary-900/50
+        w-full min-h-[88px] flex items-center justify-between px-2 py-1.5 bg-primary-950/40 hover:bg-primary-900/50
         backdrop-blur-md rounded-dx border transition-all duration-150 shadow-xs cursor-pointer group
         ${isHighlighted ? 'border-focus-300/90 shadow-md shadow-focus-500/20' : 'border-main/10 hover:border-focus-300/40'}
         ${itsTimed ? 'animate-shadow-pulse' : ''}
@@ -190,14 +208,14 @@ const ClientItem = ({
       {/* Icono de estado de entrega con z-20 para sobreponerse a TimeDivider */}
       <div
         className={`min-w-[40px] relative size-[40px] mx-2.5 shadow-sm shadow-black/60 rounded-full z-20 shrink-0 outline-1 ${
-          isActive ? 'outline-focus-300' : 'outline-main/20'
+          isActive && client.isProcessed ? 'outline-focus-300' : 'outline-main/20'
         }`}
       >
         <div
           onClick={handleIconClick}
           className={`rounded-full size-full flex items-center justify-center shadow-xs transition-all cursor-pointer active:scale-95 ${client.isProcessed
             ? 'bg-success hover:bg-success'
-            : 'bg-warning hover:bg-warning'
+            : 'bg-main/50 hover:bg-main/60'
             }`}
           title={client.isProcessed ? 'Cliente completado (ver facturas/cobranzas)' : 'Cliente pendiente (ver facturas/cobranzas)'}
         >
@@ -212,9 +230,19 @@ const ClientItem = ({
       {/* Info del cliente */}
       <div className="flex flex-col justify-center min-w-0 flex-1 h-full items-start pr-1">
         <div className="w-full flex items-center justify-between gap-1">
-          <span className="text-focus-300 font-mono font-semibold text-xs truncate">
-            #{client.clientId || client.id}
-          </span>
+          <div className="flex items-center gap-1 min-w-0">
+            <span className="text-focus-300 font-mono font-semibold text-xs truncate">
+              #{client.clientId || client.id}
+            </span>
+            {showRejectionChip && (
+              <span
+                className="px-1 py-px rounded-dx text-[9px] font-bold text-variant bg-status-error shrink-0"
+                title={`Rechazo parcial: $${formatMoney(rejectedAmount)}`}
+              >
+                R
+              </span>
+            )}
+          </div>
           <div
             className="flex items-center mr-1 shrink-0"
             title={savingEnergyMode ? 'Modo ahorro de energía' : undefined}
@@ -228,10 +256,27 @@ const ClientItem = ({
           {client.name}
         </p>
 
+        <div className="w-full flex items-center gap-1 mt-0.5 min-w-0 overflow-hidden">
+          {statusBadges.map((badge) => (
+            <span
+              key={badge.key}
+              className={`px-1.5 py-px rounded-dx text-[9px] font-semibold text-variant truncate max-w-[48%] ${badge.className}`}
+              title={badge.label}
+            >
+              {badge.label}
+            </span>
+          ))}
+        </div>
+
         {/* Totales y bultos */}
-        <div className="w-full flex items-center justify-between gap-2 mt-1 pt-1 border-t border-main/5 text-[11px]">
+        <div className="w-full flex items-center justify-between gap-2 mt-0.5 pt-0.5 border-t border-main/5 text-[11px]">
           <span className="text-main/50 font-medium truncate">
             {client.bulks} {client.bulks === 1 ? 'bulto' : 'bultos'}
+            {hasRejection && (
+              <span className="text-status-error font-semibold ml-1">
+                · {rejectionAmountLabel} ${formatMoney(rejectedAmount)}
+              </span>
+            )}
           </span>
           <span className="font-bold text-focus-300 font-mono shrink-0">
             ${formatMoney(invoiceTotal)}

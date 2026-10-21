@@ -13,6 +13,7 @@ import { getRejectedsSummaryByDeliveryIds } from '../../../../store/selectors/re
 import { formatMoney, formatWeight } from '../../../../utils/helpers/formatters';
 import { CustomTooltip } from '../../../../components/customTooltip';
 import { indexToColor } from '@repo/map-core';
+import { deliveryClientKey } from '../../../../store/slices/driverObserver/clientsSlice';
 
 interface IKPIProps {
     title: string;
@@ -106,7 +107,9 @@ const DriverModal = (props: IDriverModalProps) => {
         }
     }, [dispatch, driverId, deliveriesByDriverId]);
 
-    const { clientIdsByDeliveryId, clientById } = useAppSelector((state) => state.deliveryClients);
+    const { clientIdsByDeliveryId, clientByDeliveryKey } = useAppSelector(
+        (state) => state.deliveryClients
+    );
 
     const routes = driverRoutes?.routes?.[driverId];
     const hasRoute = Boolean(routes && Object.keys(routes).length > 0);
@@ -163,7 +166,8 @@ const DriverModal = (props: IDriverModalProps) => {
             if (cIds.length > 0) {
                 for (const cId of cIds) {
                     totalClients++;
-                    const client = clientById[cId];
+                    const client =
+                        clientByDeliveryKey[deliveryClientKey(delivery.id, cId)];
                     if (client?.isProcessed) {
                         processedClients++;
                     }
@@ -182,7 +186,7 @@ const DriverModal = (props: IDriverModalProps) => {
             totalBulks,
             totalInvoices,
         };
-    }, [activeDeliveries, clientIdsByDeliveryId, clientById]);
+    }, [activeDeliveries, clientIdsByDeliveryId, clientByDeliveryKey]);
 
     const sortedDeliveries = useMemo(() => {
         return [...driverDeliveries].sort((a, b) => a.id - b.id);

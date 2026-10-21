@@ -23,7 +23,8 @@ export const INVOICE_STATUS_MAP: Record<string, string> = {
   COLLECTED: 'Cobrado',
   REJECTED: 'Rechazado',
   PENDING: 'Pendiente',
-  PARTIALLY_COLLECTED: 'Cobrado Parcial'
+  PARTIALLY_COLLECTED: 'Cobrado Parcial',
+  FORWARDED: 'Reprogramado',
 };
 
 export const INVOICE_STATUS_COLOR_MAP: Record<string, string> = {
@@ -31,6 +32,27 @@ export const INVOICE_STATUS_COLOR_MAP: Record<string, string> = {
   COLLECTED: 'bg-success',
   REJECTED: 'bg-error',
   PENDING: 'bg-warning',
+  FORWARDED: 'bg-[#7C3AED]',
+};
+
+export const isForwardedInvoice = (invoice: {
+  status?: string | null;
+  statusDelivered?: string | null;
+  originalDeliveryId?: number | null;
+  deliveryId?: number | null;
+}): boolean => {
+  const status = (invoice.status || '').toUpperCase();
+  const delivered = (invoice.statusDelivered || '').toUpperCase();
+  if (status === 'FORWARDED' || delivered === 'FORWARDED') return true;
+  const original = Number(invoice.originalDeliveryId);
+  const current = Number(invoice.deliveryId);
+  return (
+    Number.isFinite(original) &&
+    original > 0 &&
+    Number.isFinite(current) &&
+    current > 0 &&
+    original !== current
+  );
 };
 
 export const getInvoiceStatusLabel = (status: string): string => {

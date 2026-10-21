@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 import CustomModal from '../../../../components/modal';
 import { useAppDispatch, useAppSelector } from '../../../../store/hooks';
 import {
@@ -21,11 +21,13 @@ import type { ISSERoute } from '../../../../utils/types/sellerObserver/sellers.t
 import type { IConnectionStatus } from '../../../../utils/types/sellerObserver/locations.types';
 import { BASE_URL } from '../../../../utils/constants/url.constants';
 import { addRoutePoint, changeFocus, isFocussed, setIsAnimating } from '../../../../store/slices/driverObserver/driversSlice';
+import { deliveryClientKey } from '../../../../store/slices/driverObserver/clientsSlice';
 import { renderToString } from 'react-dom/server';
 import DeliveryClientTooltip from '../../components/deliveryClientTooltip';
 import { getLastPositionByPhone } from '../../../../services/locations.service';
 import useDeliveryClientActions from '../../../../utils/hooks/map/useDeliveryClientActions';
 import { lastPositionToRoute, MqttToRoute } from '../../../../utils/helpers/routeParser';
+import { useContextbarContext } from '../../../../utils/contexts/contextbar.context';
 
 const MapView = () => {
   const { fitCoordinates } = useMapCore();
@@ -37,8 +39,17 @@ const MapView = () => {
   const dispatch = useAppDispatch();
   const { driversUI, driverRoutes, watchList, filterList, animation, driverById } = useAppSelector((state) => state.drivers);
   const { deliveriesByDriverId, watchList: deliveryWatchList } = useAppSelector((state) => state.deliveries);
-  const { clients, clientIdsByDeliveryId } = useAppSelector((state) => state.deliveryClients);
+  const { clients, clientIdsByDeliveryId, clientByDeliveryKey } = useAppSelector(
+    (state) => state.deliveryClients
+  );
+  const { openKey, isOpen: isContextbarOpen } = useContextbarContext();
   const { TIMESTAMPS, ROUTES } = useDriverRenderRef();
+
+  const openTimelineDeliveryId = useMemo(() => {
+    if (!isContextbarOpen || !openKey) return null;
+    const match = /^delivery-timeline-(\d+)$/.exec(openKey);
+    return match ? Number(match[1]) : null;
+  }, [isContextbarOpen, openKey]);
 
   const requestedRef = useRef<Set<number>>(new Set());
   const prevWatchList = useRef<number[]>([]);
@@ -55,6 +66,7 @@ const MapView = () => {
   const {
     createPolyLine,
     resetPathElements,
+    removePathElementsById,
     handleMarkers,
     handleTooltips,
     handleActions,
@@ -63,7 +75,7 @@ const MapView = () => {
   const snakePolyLinesRef = useRef(snakePolyLines);
   snakePolyLinesRef.current = snakePolyLines;
 
-  const { onClick: onClientClick } = useDeliveryClientActions();
+  const { onClick: onClientClick, onLeftClick: onClientLeftClick } = useDeliveryClientActions();
 
   const { mapInteractions } = useModeRef();
   const { OpenModal } = useModalRef();
@@ -72,6 +84,12 @@ const MapView = () => {
     driverElements,
     clientElements,
   } = mapContext;
+
+  const clearVisitOverlays = useCallback(() => {
+    removePathElementsById(clientElements, 'deliveryClients', 'clientToVisitPolylines');
+    removePathElementsById(clientElements, 'deliveryClients', 'visitPointMarkers');
+    removePathElementsById(clientElements, 'deliveryClients', 'visitDistanceTooltips');
+  }, [clientElements, removePathElementsById]);
 
   const trackDriver = (route: ISSERoute) => {
     handleMarkers({
@@ -300,6 +318,7 @@ const MapView = () => {
     const visibleClientIds = new Set<number>();
     const clientDriverColorMap = new Map<number, string>();
     const clientDeliveryIdMap = new Map<number, number>();
+    const clientWatchedDeliveryIds = new Map<number, number[]>();
 
     Object.entries(deliveriesByDriverId).forEach(([driverKey, driverDeliveries]) => {
       const driverId = Number(driverKey);
@@ -318,6 +337,11 @@ const MapView = () => {
             visibleClientIds.add(clientId);
             clientDriverColorMap.set(clientId, driverColor);
             clientDeliveryIdMap.set(clientId, delivery.id);
+            const watched = clientWatchedDeliveryIds.get(clientId) || [];
+            if (!watched.includes(delivery.id)) {
+              watched.push(delivery.id);
+              clientWatchedDeliveryIds.set(clientId, watched);
+            }
           } else if (!clientDriverColorMap.has(clientId)) {
             clientDriverColorMap.set(clientId, driverColor);
             clientDeliveryIdMap.set(clientId, delivery.id);
@@ -326,18 +350,42 @@ const MapView = () => {
       });
     });
 
-    // 2. Renderizar marcadores de clientes únicos
-    clients.forEach((client) => {
-      const clientId = client.id;
-      if (!client || !client.location) return;
+    const resolveActiveDeliveryId = (clientId: number): number | undefined => {
+      // (1) Timeline abierta de un reparto que incluye este PDV
+      if (
+        openTimelineDeliveryId != null &&
+        (clientIdsByDeliveryId[openTimelineDeliveryId] || []).includes(clientId)
+      ) {
+        return openTimelineDeliveryId;
+      }
 
-      const lat = Number(client.location.latitude);
-      const lng = Number(client.location.longitude);
+      // (2) Último reparto en deliveryWatchList que lo contenga
+      const watchedForClient = clientWatchedDeliveryIds.get(clientId) || [];
+      for (let i = deliveryWatchList.length - 1; i >= 0; i--) {
+        const dId = deliveryWatchList[i];
+        if (watchedForClient.includes(dId)) return dId;
+      }
+
+      // (3) Fallback
+      return clientDeliveryIdMap.get(clientId);
+    };
+
+    // 2. Renderizar marcadores de clientes únicos (coords por PDV; estado del reparto activo)
+    clients.forEach((displayClient) => {
+      const clientId = displayClient.id;
+      if (!displayClient || !displayClient.location) return;
+
+      const lat = Number(displayClient.location.latitude);
+      const lng = Number(displayClient.location.longitude);
       if (isNaN(lat) || isNaN(lng) || (lat === 0 && lng === 0)) return;
 
       const shouldBeVisible = visibleClientIds.has(clientId);
       const driverColor = clientDriverColorMap.get(clientId);
-      const deliveryId = clientDeliveryIdMap.get(clientId);
+      const deliveryId = resolveActiveDeliveryId(clientId);
+      const client =
+        (deliveryId != null
+          ? clientByDeliveryKey[deliveryClientKey(deliveryId, clientId)]
+          : null) ?? displayClient;
 
       const parsedData: IMarkerCreationProps = {
         target: clientElements,
@@ -347,10 +395,12 @@ const MapView = () => {
           coordinates: [lat, lng],
         },
         clickAction: () => onClientClick({ client, deliveryId }),
-        leftClickAction: () => onClientClick({ client, deliveryId }),
+        leftClickAction: () => onClientLeftClick({ client, deliveryId }),
         hoverAction: (isHover, e) => {
           const currentContent = isHover
-            ? renderToString(<DeliveryClientTooltip client={client} />)
+            ? renderToString(
+                <DeliveryClientTooltip client={client} deliveryId={deliveryId} />
+              )
             : '';
           handleTooltips({
             id: clientId,
@@ -377,12 +427,15 @@ const MapView = () => {
     filterList,
     deliveryWatchList,
     clientIdsByDeliveryId,
+    clientByDeliveryKey,
     clients,
     clientElements,
     handleMarkers,
     handleTooltips,
     onClientClick,
+    onClientLeftClick,
     driversUI,
+    openTimelineDeliveryId,
   ]);
 
   // Actions handlers 
@@ -433,6 +486,7 @@ const MapView = () => {
     }
 
     resetPathElements(driverElements, getIntersection(watchList, filterList));
+    clearVisitOverlays();
 
     if (ROUTES) {
       const routes = driverRoutes.routes;
@@ -523,11 +577,11 @@ const MapView = () => {
     };
   }, [watchList, filterList, date, TIMESTAMPS, ROUTES, enterprise.enterprise_id]);
 
-  // CLIENTS MARKERS: igual que sellers — reset excluye el bucket de markers y borra tooltips keyed por clientId
   useEffect(() => {
     resetPathElements(clientElements, ['deliveryClients']);
+    clearVisitOverlays();
     clientsMarkers();
-  }, [clientsMarkers, clientElements, resetPathElements]);
+  }, [clientsMarkers, clientElements, resetPathElements, clearVisitOverlays]);
 
   useEffect(() => {
     dispatch(setIsAnimating({ isAnimating: false, driverAnimated: null }));
