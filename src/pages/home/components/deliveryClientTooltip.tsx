@@ -204,6 +204,16 @@ const DeliveryClientTooltip = ({ client, deliveryId }: IProps) => {
             </span>
           ))}
         </div>
+        <div className="flex items-center gap-1.5 text-xs text-main/60">
+          <div
+            className={`size-1.5 rounded-full shrink-0 ${
+              client.isVisited ? 'bg-status-success' : 'bg-status-error'
+            }`}
+          />
+          <span className="truncate">
+            {client.isVisited ? 'VISITADO' : 'NO VISITADO'}
+          </span>
+        </div>
       </div>
       {/* Financials: Invoices total & Rejection */}
       {(hasInvoices || hasRejection) && (
